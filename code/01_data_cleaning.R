@@ -1,7 +1,9 @@
 # 01 - Initial data cleaning for DSP4SH data
 # Katy Dynarski, October 2023
 
-#### Housekeeping  - Libraries and Data Import ####
+# This script imports dataframes from the DSP4SH SQL database, checks cooperator data for any sample duplication or labeling errors, and joins cooperator lab measurements, field descriptions, horizon designations, and project design information (sites, treatments, plots, etc) into one large dataframe that can be used for downstream analysis.
+
+# 0 - Libraries and Data Import ####
 # Read in DB
 dsp4sh4 <- dbConnect(SQLite(), here("data_raw", "dsp4sh4.db")) 
 
@@ -22,7 +24,7 @@ layer_desig <- data$layerdesignation %>%
 project_design <- data$projectdesign %>%
   clean_names() # information about the overall project design for individual cooperator projects
 
-# Check data tables for duplication and errors ####
+# 1 - Check data tables for duplication and errors ####
 # The goal is to be able to join the lab data to the field description data in order to eventually calculate things like SOC stocks in a soil profile (which requires both lab data and field data). The depths of the soil horizons are stored in layer_desig, so that will also need to be joined in. And, to analyze data we want information about the plots and treatments.
 
 # Start by checking tables for any duplicate values or anything that's "off" and might effect data joining and downstream analysis
@@ -51,7 +53,7 @@ dupe_ids <- layer_desig %>%
 dupe_hzdesig <- layer_desig %>%
   filter(dsp_sample_id %in% dupe_ids$dsp_sample_id) %>%
   arrange(dsp_sample_id)
-write.csv(dupe_hzdesig, here("data", "dupe_hzdesig.csv"), row.names=FALSE)
+write.csv(dupe_hzdesig, here("data_processed", "01_dupe_hzdesig.csv"), row.names=FALSE)
 # issue appears to be that for some sample IDs (i.e. horizon within a pedon), there are multiple horizon designations for the same depth, which is creating extra rows 
 # without fully knowing how horizons data was combined, I would wager a guess that this happened if horizon designations differed between the layer description and the layer lab measurement data sheets
 # looking at original Excel sheets - yes, I do think that this is the problem
@@ -77,8 +79,8 @@ lab_no_field <- coop_lab %>%
 
 # Talked to Ekundayo - for some projects, they only did a full field characterization for the central pedon, and then collected soil samples from satellite pedons for lab analysis, so these pedons will have lab data but no field data. Maybe can use generalized horizon labels to map data from the central pedon to the other pedons? Cross that bridge when we get to it.
 
-# Make a table of horizon designations that doesn't have duplicates - from lab data only ####
-lab_orig <- read.csv(here("data", "DSP4SH_CL_coop_lab_phase1-2v2.csv")) %>%
+# 2 - Make a table of horizon designations that doesn't have duplicates - from lab data only ####
+lab_orig <- read.csv(here("data_raw", "DSP4SH_CL_coop_lab_phase1-2v2.csv")) %>%
   clean_names()
 # verify that data are the same size as data from DB
 nrow(lab_orig)
@@ -90,7 +92,7 @@ names(layer_desig)
 layer_desig_lab <- lab_orig %>%
   select(dsp_sample_id, dsp_pedon_id, layer_no, hzdesg, hrzdep_t, hrzdep_b)
 
-# Make dataframe joining lab data to field data ####
+# 3 - Make dataframe joining lab data to field data ####
 # Join dsp_pedon_id to dsp_plot_id so that site-level data can be attached to pedon-level data
 pedon_plot <- pedon %>%
   select(dsp_pedon_id, dsp_plot_id)
@@ -104,7 +106,7 @@ layer_join <- coop_lab %>%
   left_join(pedon_plot, by="dsp_pedon_id") %>%
   left_join(dspplotmgt, by="dsp_plot_id")
 
-# Checking that all data is assigned to a project ####
+# 4 - Checking that all data is assigned to a project ####
 # Extract names of projects
 projects <- layer_join %>%
   distinct(project)
@@ -139,7 +141,7 @@ layer_desig_lab2 <- layer_desig_lab %>%
   mutate(dsp_sample_id = str_replace_all(dsp_sample_id, "NTR -  -", "NTR - 3 -"),
          dsp_pedon_id = str_replace_all(dsp_pedon_id, "NTR -  -", "NTR - 3 -"))
 
-# Make final join with corrected data ####
+# 5 - Make final join with corrected data ####
 layer_join2 <- coop_lab2 %>%
   left_join(layer_desig_lab2, by=c("dsp_sample_id", "dsp_pedon_id", "layer_no")) %>%
   left_join(layer_descr2, by=c("dsp_sample_id", "dsp_pedon_id", "dsp_pedon"), 
@@ -155,5 +157,5 @@ projects2 <- layer_join2 %>%
 # it looks like there are also a number of pedons that don't have associated plot IDs
 # for now - it's hard to backfill this information, just leave it and note
 
-# Write CSV ####
-write_csv(layer_join2, here("data_processed", "coop_data_full.csv"), na="NA")
+# 6 - Write CSV ####
+write_csv(layer_join2, here("data_processed", "01_coop_data_full.csv"), na="NA")

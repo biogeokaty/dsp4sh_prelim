@@ -1,13 +1,17 @@
-# 03 - SOC Stock Calculation
+# 04 - SOC Stock Calculation
 # Katy Dynarski, October 2023
 
-# Calculate SOC Stocks for each pedon ####
+# This script takes processed cooperator data that has been checked for NA SOC, bulk density, and coarse fragment values (see script 03_missing_msmts for methods) and calculates SOC stocks for each soil profile
+
+# 0 - Import data ####
+
+coop_data <- read.csv(here("data_processed", "03_coop_data_filled.csv"))
+
+# 1 - Calculate SOC Stocks for each pedon ####
 
 # Information that is needed:
 # For each horizon: soil carbon %, Db, horizon depth, and %CF
 # then sum all horizons in each pedon
-# CF should be in layer description for each layer
-# Also need to calculate horizon depth
 
 # SOC stock (pedon) = sum(SOC% * BD * depth * (1-%CFrag/100))
 
