@@ -2,7 +2,7 @@
 # Katy Dynarski, October 2023
 
 # Import and subset data, initialize SoilProfileCollection
-coop_data <- read.csv(here("data_processed", "coop_data_full.csv"))
+coop_data <- read.csv(here("data_processed", "01_coop_data_full.csv"))
 ks <- coop_data %>%
   filter(project == "KansasState")
 
