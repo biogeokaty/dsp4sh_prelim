@@ -11,7 +11,7 @@ coop_spc <- coop_data
 # 1 - SOC% - Identify missing data ####
 no_soc <- coop_data %>%
   filter(is.na(soc_pct))
-# three samples missing SOC%
+# 99 samples missing SOC% (most of them probably from Texas A&M project with missing SOC)
 
 # Promote to Soil Profile Collection to take a look at the profiles
 depths(coop_spc) <- dsp_pedon_id ~ hrzdep_t + hrzdep_b
@@ -25,7 +25,7 @@ plotSPC(no_soc_spc, color="soc_pct")
 # 2 - SOC% - Fill missing values based on average SOC for horizon/treatment ####
 
 # Calculate grouped means for generalized horizons grouped by treatment
-# Use na.aggregate() function from zoo pkg, which will fill NA values with means (supported grouped means)
+# Use na.aggregate() function from zoo pkg, which will fill NA values with grouped means
 # Try this for UnivOfMinnesota subset
 minn_soc <- subset(coop_spc, project=="UnivOfMinnesota")
 
@@ -67,7 +67,7 @@ coop_data_soc_filled <- coop_data %>%
 # Check for remaining NAs
 coop_data_soc_filled %>%
   filter(is.na(soc_fill))
-# tibble is empty - success!!
+# just Texas A&M Pt 2 project
 
 # 3 - Bulk Density - Identify missing data ####
 no_bd <- coop_data %>%
@@ -82,8 +82,7 @@ projects_no_bd$project
 
 # Fill BD values separately for each project and then join together, then join with filled SOC data to make completed df
 
-# 4 - Bulk Density - Fill missing values project-by-project
-# 4 - Bulk Density - Fill in missing data for each project
+# 4 - Bulk Density - Fill in missing data for each project ####
 # 4.1 - KansasState BD Fill ####
 ks_bd <- subset(coop_spc, project=="KansasState")
 plotSPC(ks_bd, color='bulk_density')
@@ -198,7 +197,7 @@ ill_sub_bd_filled <- ill_sub %>%
 ill_sub_filled_spc <- ill_sub_bd_filled 
 depths(ill_sub_filled_spc) <- dsp_pedon_id ~ hrzdep_t + hrzdep_b
 hzdesgnname(ill_sub_filled_spc) <- 'hzdesg'
-plotSPC(ill_sub_filled_spc, color="bd_class_avg") # looks good
+plotSPC(ill_sub_filled_spc, color="bd_fill") # looks good
 
 # 4.6 - UTRGV BD Fill ####
 utrgv_bd <- subset(coop_spc, project=="UTRGV")
@@ -237,9 +236,9 @@ plotSPC(uconn_bd, color="bd_fill")
 uconn_bd_filled <- horizons(uconn_bd)
 
 # 4 - Bulk Density - Join project data back together ####
-# need to also add back in the data where no calculations were performed - Texas A&M pt1 and UTRGV
+# need to also add back in the data where no calculations were performed - Texas A&M pt1and2, OSU, and UTRGV
 coop_data_bd_fine <- coop_data %>%
-  filter(project=="TexasA&MPt-1" | project == "UTRGV") %>%
+  filter(project=="TexasA&MPt-1" | project=="TexasA&MPt-2" | project=="OregonState" |project == "UTRGV") %>%
   mutate(bd_fill = bulk_density)
 
 coop_data_bd_filled <- bind_rows(ks_bd_filled, ncs_bd_filled, wash_bd_filled, minn_bd_filled, ill_sub_bd_filled, uconn_bd_filled) %>%
@@ -283,6 +282,6 @@ coop_data_filled <- coop_data_bd_filled %>%
 
 # check for NA values
 na_check <- coop_data_filled %>%
-  filter(is.na(soc_fill) | is.na(bd_fill) | is.na(coarse_frag_fill)) # only NAs left are bulk density in UTRGV pits below 30 cm, which we are going to leave for now
+  filter(is.na(soc_fill) | is.na(bd_fill) | is.na(coarse_frag_fill)) # only NAs left are Texas A&M pt 2 project and bulk density in UTRGV pits below 30 cm, which we are going to leave for now
 
 write_csv(coop_data_filled, here("data_processed", "03_coop_data_filled.csv"))

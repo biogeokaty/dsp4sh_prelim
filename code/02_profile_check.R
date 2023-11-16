@@ -313,7 +313,7 @@ plotSPC(uconn_valid, color='genhz')
 uconn_corr <- horizons(uconn_valid)
 
 # 11 - Re-join data for corrected project dataset and write CSV ####
-coop_corr <- bind_rows(ks_corr, ncs_corr, tam1_corr, wash_corr, minn_corr, ill_corr, utrgv_corr, uconn_corr) %>%
+coop_corr <- bind_rows(ks_corr, ncs_corr, tam1_corr, tam2, wash_corr, minn_corr, osu_corr, ill_corr, utrgv_corr, uconn_corr) %>%
   select(!hzID)
 coop_corr_spc <- coop_corr
 
