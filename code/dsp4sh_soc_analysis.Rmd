@@ -1,0 +1,79 @@
+---
+title: "DSP4SH Phase 2 - SOC Stock and Indicator Analysis"
+author: "Katy Dynarski"
+date: "2023-11-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Load libraries
+library(here)
+library(tidyverse)
+library(DBI)
+library(RSQLite)
+library(janitor)
+library(aqp)
+library(zoo)
+library(flextable)
+library(multcompView)
+
+# Load data
+soc_pedon <- read.csv(here("data_processed", "04_soc_stock_pedon.csv"))
+soc_horizon <- read.csv(here("data_processed", "04_soc_stock_horizon.csv"))
+
+# Make list with mean and sd functions - useful for generating summary tables
+mean_sd <- list(
+  mean = ~round(mean(.x, na.rm = TRUE), 2), 
+  sd = ~round(sd(.x, na.rm = TRUE), 2)
+)
+```
+
+## Summary table of SOC stocks across projects, soils, and treatments
+
+Mean, standard deviation, and n for SOC stocks calculated to 30 cm and 100 cm for all soils in DSP4SH phase 2. 
+
+```{r soc summary}
+soc_summary <- soc_pedon %>%
+  group_by(soil, label) %>%
+  summarize(across(soc_stock_30cm:soc_stock_100cm, mean_sd), n=n())
+flextable(soc_summary)
+```
+
+## Boxplots and ANOVA of treatment and soil effects on SOC stocks at 30 cm and 100 cm depths
+
+The summary table shows that some some projects didn't have a consistent soil type across the different treatments, or just didn't have sufficient SOC data to calculate 30 cm or 100 cm depths. Data from these soils should be excluded from further analysis. These soils are: Canton, Hidalgo (has 30 cm stocks, not 100 cm), Pullman, Kenyon, Marquis, Readlyn, and Woodbridge.
+
+Factorial ANOVA shows that for both 30 cm and 100 cm SOC stocks, only soil series has a significant effect on SOC stock, not treatment.
+
+```{r filter data}
+# Need to exclude soils that don't have 100-cm stocks OR only have one soil type per treatment
+soils_exclude100 <- c("Canton", "Hidalgo", "Pullman", "Kenyon", "Marquis", "Readlyn", "Woodbridge")
+soc_pedon_filt100 <- soc_pedon %>%
+  filter(!soil %in% soils_exclude100)
+
+anova(aov(soc_stock_100cm ~ (soil+label)^2, data=soc_pedon_filt100))
+
+# 30 cm stocks
+# For 30 cm stocks - can also include Hidalgo soils
+soils_exclude30 <- c("Canton", "Pullman", "Kenyon", "Marquis", "Readlyn", "Woodbridge")
+soc_pedon_filt30 <- soc_pedon %>%
+  filter(!soil %in% soils_exclude30)
+
+anova(aov(soc_stock_100cm ~ (soil+label)^2, data=soc_pedon_filt30))
+# Soil series is the only significant variable for 30 cm stocks as well
+```
+
+We can plot the SOC stocks by soil and treatment to visually confirm this:
+``` {r SOC stock boxplots by treatment and soil, echo=FALSE}
+ggplot(soc_pedon_filt100, aes(x=soil, y=soc_stock_100cm, fill=label)) +
+  geom_boxplot() +
+  labs(x="Soil", y="SOC stock to 100 cm depth (Mg/ha)") +
+  theme_katy()
+
+ggplot(soc_pedon_filt30, aes(x=soil, y=soc_stock_30cm, fill=label)) +
+  geom_boxplot() +
+  labs(x="Soil", y="SOC stock to 30 cm depth (Mg/ha)") +
+  theme_katy()
+```

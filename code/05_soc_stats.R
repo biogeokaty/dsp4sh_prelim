@@ -36,11 +36,11 @@ mean_sd <- list(
 
 # make table with summary statistics grouped by project and treatment
 soc_summary <- soc_pedon %>%
-  group_by(soil, label) %>%
+  group_by(project, soil, label) %>%
   summarize(across(soc_stock_30cm:soc_stock_100cm, mean_sd), n=n())
 flextable(soc_summary)
 
-# 3 - Summary boxplots - effect of treatment and project on SOC stocks ####
+# 3 - Summary boxplots and ANOVA - effect of treatment and project on SOC stocks ####
 
 # Boxplot comparing total SOC stocks (to 100cm) between treatments - I don't think this is helpful, shouldn't look at treatments without soil types since SOC stocks are so strongly driven by soil type
 ggplot(soc_pedon, aes(x=label, y=soc_stock_100cm)) +
@@ -51,13 +51,33 @@ ggplot(soc_pedon, aes(x=label, y=soc_stock_100cm)) +
 
 # Boxplot comparing total SOC stocks (100 cm) between treatments within soil types
 # Need to exclude soils that don't have 100-cm stocks OR only have one soil type per treatment
-soils_exclude <- c("Canton", "Hidalgo", "Pullman", "Kenyon", "Marquis", "Readlyn")
-ggplot(filter(soc_pedon, !soil %in% soils_exclude), aes(x=soil, y=soc_stock_100cm, fill=label)) +
+soils_exclude100 <- c("Canton", "Hidalgo", "Pullman", "Kenyon", "Marquis", "Readlyn", "Woodbridge")
+soc_pedon_filt100 <- soc_pedon %>%
+  filter(!soil %in% soils_exclude100)
+
+ggplot(soc_pedon_filt100, aes(x=soil, y=soc_stock_100cm, fill=label)) +
   geom_boxplot() +
   labs(x="Soil", y="SOC stock to 100 cm depth (Mg/ha)") +
   theme_katy()
 ggsave(here("figs", "soc_stock_boxplot_soil_mgmt.png"), width=10, height=7, units="in", dpi=400)
 # can see a clear effect of soil type - soil profiles in each project tend to cluster around a similar SOC stock. It's a little easier to see effects of treatment in this plot - reference sites have wildly higher SOC stocks for some projects. Interestingly, we never really see higher SOC stocks under SHM treatment. 
+
+anova(aov(soc_stock_100cm ~ (soil+label)^2, data=soc_pedon_filt100))
+# Only soil series has a significant effect on SOC stocks - this makes sense. It's hard to influence deep soils!
+
+# Is this also reflected in 30 cm stocks?
+# For 30 cm stocks - can also include Hidalgo soils
+soils_exclude30 <- c("Canton", "Pullman", "Kenyon", "Marquis", "Readlyn", "Woodbridge")
+soc_pedon_filt30 <- soc_pedon %>%
+  filter(!soil %in% soils_exclude30)
+
+ggplot(soc_pedon_filt30, aes(x=soil, y=soc_stock_30cm, fill=label)) +
+  geom_boxplot() +
+  labs(x="Soil", y="SOC stock to 30 cm depth (Mg/ha)") +
+  theme_katy()
+
+anova(aov(soc_stock_100cm ~ (soil+label)^2, data=soc_pedon_filt30))
+# Soil series is the only significant variable for 30 cm stocks as well
 
 # how well are 30 cm stocks correlated with 100 cm stocks?
 ggplot(soc_pedon, aes(x=soc_stock_30cm, y=soc_stock_100cm)) +
@@ -65,7 +85,7 @@ ggplot(soc_pedon, aes(x=soc_stock_30cm, y=soc_stock_100cm)) +
   geom_smooth(method="lm")
 
 # 4 - Plot SOC stocks with depth ####
-# promote horizon data to SPC
+# promote horizon data to SPC so we can analyze using slab()
 soc_spc <- soc_horizon
 depths(soc_spc) <- dsp_pedon_id ~ hrzdep_t + hrzdep_b
 hzdesgnname(soc_spc) <- 'hzdesg'
@@ -91,13 +111,14 @@ slab_bau <- aqp::slab(subset(soc_spc, label=="BAU"),
 slab_mgmt <- bind_rows(slab_ref, slab_shm, slab_bau)
 
 # Plot with all mgmt together - filter out soils that don't have stocks calculated to 100cm 
-ggplot(filter(slab_mgmt, !soil %in% soils_exclude), aes(x=top, y=p.q50, color=label)) +
-  geom_line(linewidth=1.2) +
+ggplot(filter(slab_mgmt, !soil %in% soils_exclude), aes(x=top, y=p.q50)) +
+  geom_line(linewidth=1.2, aes(color=label)) +
   geom_ribbon(aes(ymin=p.q25, ymax=p.q75, x=top, fill=label), alpha=0.2) +
   xlim(c(100,0)) +
   coord_flip() +
   labs(title="Median SOC Stocks by Depth", x="Depth", y="SOC (Mg/ha)") +
   facet_wrap(~ soil)
+ggsave(here('figs', "soc_stocks_by_depth_all_mgmt.png"))
 
 # Plot reference conditions only
 ggplot(filter(slab_mgmt, !soil %in% soils_exclude & label=="Ref"), aes(x=top, y=p.q50)) +
@@ -141,28 +162,6 @@ ggplot(slab_label, aes(x=label, y=p.q50, fill=fct_rev(depth_increment))) +
   theme_katy()
 # Figure shows that most of variation between treatments in SOC stocks is due to differences in 0-10cm depth (though interestingly, SHM seems to have lower SOC stocks on both 10-30 and 30-100 depth then BAU and Ref treatments)
 
-# 6 - ANOVA for total SOC stocks ####
-anova(aov(soc_stock_100cm ~ (project+label)^2, data=soc_pedon))
-# significant effect of soil series, label (treatment), and their interaction - not surprising!!
-
-anova(aov(soc_stock_100cm ~ (soil+label)^2, data=soc_pedon))
-# if we group by soil series - only significant effect of soil series
-
-# how is that possible
-soc_pedon %>%
-  group_by(project, soil) %>%
-  count()
-# University of Minnesota has three different soil series(!)
-ggplot(filter(soc_pedon, project=="UnivOfMinnesota"), aes(x=soil, y=soc_stock_100cm, fill=label)) +
-  geom_boxplot()
-# each treatment is on a different soil series, makes it hard to disentangle soil series from treatment
-
-ggplot(soc_pedon, aes(x=label, y=soc_stock_100cm, fill=label)) +
-  geom_boxplot() +
-  facet_wrap(~ soil, scales="free_y")
-
-# it will be really interesting to tease out - are there drivers of SOC stocks across dataset? and do those explain more variability than treatment?
-
 # 7 - Plot SOC stocks in reference only and BAU vs SHM conditions ####
 
 # Reference only
@@ -184,6 +183,7 @@ anova(aov(soc_stock_100cm ~ (soil+label)^2, data=soc_pedon_mgmt))
 # may need to remove the Minnesota project for comparison - think it throws things off to have one project where each label is on a different soil series
 
 # 8 - Plot other indicators vs SOC concentrations/stocks ####
+# Pull out surface horizons only
 surf <- soc_horizon %>%
   filter(hrzdep_b == "5")
 
@@ -254,3 +254,16 @@ sig_nested <- surf_nested %>%
   unnest(cols=c(anova_tidy))
 ggplot(filter(sig_nested, term=="label"), aes(x=indicator, y=p.value)) +
   geom_bar(stat="identity") # look at the smallest p-values to see which indicators are most strongly influenced by mgmt
+
+# 10 - PCA or something to see structure of indicator data ----
+indicators_only <- soc_horizon %>%
+  select(bulk_density, soc_pct, yoder_agg_stab_mwd:ace, clay_pct_field, soc_stock_hrz)
+indicators_normalized <- scale(indicators_only)
+
+# Plot correlation matrix
+corr_matrix <- cor(indicators_normalized, use="pairwise.complete.obs")
+corrplot(corr_matrix) 
+indicator_pca <- princomp(corr_matrix)
+summary(indicator_pca)
+
+# Hard to do this because of missing values...think about what to do about this next week :)

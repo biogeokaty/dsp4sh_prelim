@@ -11,6 +11,11 @@ library(aqp)
 library(zoo)
 library(flextable)
 library(multcompView)
+library(corrr)
+library(ggcorrplot)
+library(FactoMineR)
+library(factoextra)
+library(corrplot)
 
 # 1 - ggplot theme function ####
 theme_katy <- function(base_size=14) {
