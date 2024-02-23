@@ -159,7 +159,7 @@ groupedProfilePlot(ill2, groups='label', color='soc_pct')
 groupedProfilePlot(ill2, groups='site', color='bulk_density')
 # Each site (except for Arboretum) has a full pit (deeper than 100cm), the full pit does not have bulk density measurements but the 100 cm pits do. At the Rothermel site there are no BD measurements. My intuition is to exclude the deeper pits from analysis and just use the 100 cm pits which have data collected for consistent depth intervals (though they have no horizons assigned at these depth intervals).
 
-# Step 1 - Exclude deep, "full" pedons - these are the pedons whose DSP Pedon ID ends with A, add a depth class identifier
+# Step 1 - Exclude deep, "full" pedons - these are the pedons whose DSP Pedon ID ends with A, add a depth class identifier column
 ill_sub <- horizons(ill_bd) %>%
   filter(!str_detect(dsp_pedon_id, "A$")) %>% #excludes dsp_pedon_id ending in A
   mutate(hrzdep_t_chr = as.character(hrzdep_t),
