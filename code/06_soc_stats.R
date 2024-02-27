@@ -3,67 +3,12 @@
 
 # ALL THINGS SOC mostly mixed linear models...
 
-# 0 - Import data ####
-soc_pedon <- read.csv(here("data_processed", "04_soc_stock_pedon.csv")) %>%
-  mutate(label = factor(label, levels=c("BAU", "SHM", "Ref")))
-soc_horizon <- read.csv(here("data_processed", "04_soc_stock_horizon.csv")) %>%
-  mutate(label = factor(label, levels=c("BAU", "SHM", "Ref")))
+# 0 - Import data ----
+soc_pedon_filt100 <- read.csv(here("data_processed", "05_soc_pedon_100cm.csv"))
+soc_pedon_filt30 <- read.csv(here("data_processed", "05_soc_pedon_30cm.csv"))
+soc_horizon_filt <- read.csv(here("data_processed", "05_soc_horizon_filtered.csv"))
 
-# 1 - Visual assessment of normality for pedon SOC stocks ####
-
-# Density functions
-ggplot(soc_pedon, aes(x=soc_stock_100cm)) +
-  geom_density(aes(color=soil))
-
-ggplot(soc_pedon, aes(x=soc_stock_30cm)) +
-  geom_density(aes(color=soil))
-# Neither are quite normal, Texas A&M SOC stocks are much lower
-
-# QQ plots
-ggplot(soc_pedon, aes(sample=soc_stock_100cm)) +
-  geom_qq() +
-  geom_qq_line()
-ggplot(soc_pedon, aes(sample=soc_stock_30cm)) +
-  geom_qq() +
-  geom_qq_line()
-# Both have a bit of a tail at the low and high end but are overall not terrible
-
-# 2 - Summary statistics table with average pedon SOC stocks for different treatments and projects ####
-
-# make list with mean and sd for summarizing
-mean_sd <- list(
-  mean = ~round(mean(.x, na.rm = TRUE), 2), 
-  sd = ~round(sd(.x, na.rm = TRUE), 2)
-)
-
-# make table with summary statistics grouped by project and treatment
-soc_summary <- soc_pedon %>%
-  group_by(project, soil, label) %>%
-  summarize(across(soc_stock_30cm:soc_stock_100cm, mean_sd), n=n())
-flextable(soc_summary)
-# The summary table shows that some some projects didn't have a consistent soil type across the different treatments, or just didn't have sufficient SOC data to calculate 30 cm or 100 cm depths. Data from these soils should be excluded from further analysis. 
-# These soils are: Canton (only in SHM), Hidalgo (has 30 cm stocks, not 100 cm), Pullman (only has SOC %), Kenyon (only in Ref), Marquis (only in SHM), Readlyn (only in BAU), and Woodbridge
-
-# 3 - Remove soils from pedon and horizon data that aren't consistent between managements ----
-# For looking at soc stocks to 100 cm -
-soils_exclude100 <- c("Canton", "Hidalgo", "Pullman", "Kenyon", "Marquis", "Readlyn", "Woodbridge")
-soc_pedon_filt100 <- soc_pedon %>%
-  filter(!soil %in% soils_exclude100)
-
-write_csv(soc_pedon_filt100, here("data_processed", "05_soc_pedon_100cm.csv"))
-
-# For SOC stocks to 30 cm - can also include Hidalgo soils
-soils_exclude30 <- c("Canton", "Pullman", "Kenyon", "Marquis", "Readlyn", "Woodbridge")
-soc_pedon_filt30 <- soc_pedon %>%
-  filter(!soil %in% soils_exclude30)
-write_csv(soc_pedon_filt30, here("data_processed", "05_soc_pedon_30cm.csv"))
-
-# And the horizon data
-soc_horizon_filt <- soc_horizon %>%
-  filter(!soil %in% soils_exclude100)
-write_csv(soc_horizon_filt, here("data_processed", "05_soc_horizon_filtered.csv"))
-
-# 3 - Summary boxplots and LMER - effect of treatment and project on SOC stocks ####
+# 1 - Summary boxplots and LMER - effect of treatment and project on SOC stocks ####
 
 # Boxplot comparing total SOC stocks (100 cm) between treatments within soil types
 ggplot(soc_pedon_filt100, aes(x=soil, y=soc_stock_100cm, fill=label)) +
@@ -134,14 +79,14 @@ stock30_mixed_reduced <- lmer(soc_stock_30cm ~ (1|soil), data = soc_pedon_filt30
 anova(stock30_mixed_full, stock30_mixed_reduced, text="Chisq")
 # Models are not significantly different, indicating treatment is not a significant predictor of SOC stocks to 30cm depth
 
-# 4 - Depth plot of SOC concentration by treatment ----
+# 2 - Depth plot of SOC concentration by treatment ----
 soc_spc <- soc_horizon_filt
 depths(soc_spc) <- dsp_pedon_id ~ hrzdep_t + hrzdep_b
 hzdesgnname(soc_spc) <- 'hzdesg'
 # promote project and label to site-level so they can be used as grouping variables
 site(soc_spc) <- ~ project + label + soil
 
-# Calculate depth increments for each soil series in different management conditinos
+# Calculate depth increments for each soil series in different management conditions
 soc_stock_slab_ref <- aqp::slab(subset(soc_spc, label=="Ref"),
                       fm = soil ~ soc_stock_hrz,
                       slab.structure = c(0,5,10,30,60,100)) %>%
@@ -214,7 +159,7 @@ conc_depth <- ggplot(soc_conc_slab_all, aes(x=depth_increment, y=p.q50, fill=lab
 conc_depth
 ggsave(here("figs", "soc_conc_depth.png"))
 
-# 5 - Mixed effects models for effect of treatment on SOC concentration while accounting for soil series and depth ----
+# 3 - Mixed effects models for effect of treatment on SOC concentration while accounting for soil series and depth ----
 
 # Although there is no overall difference in SOC stocks between treatments across all experiments, it does look like there many be significantly higher concentration of SOC in surface horizon (0-5cm) in reference plots. Should do test for soil X depth X treatment effects - mixed linear model to allow for depth as continuous?
 
@@ -246,7 +191,7 @@ soc_conc_mixed_tukey <- glht(soc_conc_mixed, linfct = mcp(label = 'Tukey'))
 summary(soc_conc_mixed_tukey)
 # Ref is significantly different from both SHM and BAU. SHM and BAU are not significantly different from each other. 
 
-# 6 - Depth plot and LMER of horizon thickness-normalized SOC stocks by treatment, soil series, and depth ----
+# 4 - Depth plot and LMER of horizon thickness-normalized SOC stocks by treatment, soil series, and depth ----
 
 # Calculate stocks normalized to horizon thickness so each horizon can be comparable
 
@@ -279,7 +224,7 @@ soc_stock_mixed_tukey <- glht(soc_stock_mixed, linfct = mcp(label = 'Tukey'))
 summary(soc_stock_mixed_tukey)
 # Ref is significantly different from both SHM and BAU. SHM and BAU are not significantly different from each other. 
 
-# 7 - Bulk density patterns by treatment, soil and depth ----
+# 5 - Bulk density patterns by treatment, soil and depth ----
 # Calculate depth increments for each soil series in different management conditions
 bd_slab_ref <- aqp::slab(subset(soc_spc, label=="Ref"),
                          fm = soil ~ bd_fill,
@@ -355,7 +300,7 @@ depth_plot_grid <- plot_grid(stock_depth2, conc_depth2, bd_depth2, depth_plot_le
 depth_plot_grid
 ggsave(here("figs", "soc_stock_conc_depth.png"), height=7, width=14, units="in")
 
-# 8 - Mixed effects model of surface horizon SOC stocks and concentrations by soil series and treatment ----
+# 6 - Mixed effects model of surface horizon SOC stocks and concentrations by soil series and treatment ----
 # this is a prime candidate for automating with purrr!
 
 # Subset just 0-5 and 5-10 cm horizons since these are consistent across all experiments

@@ -43,11 +43,13 @@ library(ggfortify)
 library(tidyverse)
 
 # Load data
-soc_pedon <- read.csv(here("data_processed", "04_soc_stock_pedon.csv")) %>%
-    mutate(label = factor(label, levels=c("BAU", "SHM", "Ref")))
-soc_horizon_all <- read.csv(here("data_processed", "04_soc_stock_horizon.csv")) %>%
-    mutate(label = factor(label, levels=c("BAU", "SHM", "Ref")))
-project <- read.csv(here("data_processed", "07_project_data.csv"))
+soc_pedon100 <- read.csv(here("data_processed", "05_soc_pedon_100cm.csv"))
+soc_pedon30 <- read.csv(here("data_processed", "05_soc_pedon_30cm.csv"))
+soc_horizon_filt <- read.csv(here("data_processed", "05_soc_horizon_filtered.csv"))
+soc_horizon_all <- read.csv(here("data_processed", "05_soc_horizon_clim_infilt.csv"))
+surf_filt <- read.csv(here("data_processed", "05_surface_horizons_filt.csv"))
+surf_all <- read.csv(here("data_processed","05_surface_horizons.csv"))
+project <- read.csv(here("data_processed", "05_project_data.csv"))
 
 # Make list with mean and sd functions - useful for generating summary tables
 mean_sd <- list(
@@ -191,25 +193,6 @@ flextable(soc_summary)
 ## Boxplots and mixed linear models to show effect of treatment and soil series on SOC stocks at 30 cm and 100 cm depths
 
 The summary table shows that some some projects didn't have a consistent soil type across the different treatments, or just didn't have sufficient SOC data to calculate 30 cm or 100 cm depths. Data from these soils should be excluded from further analysis. These soils are: Canton (only in SHM), Hidalgo (has 30 cm stocks, not 100 cm), Pullman (only has SOC %), Kenyon (only in Ref), Marquis (only in SHM), Readlyn (only in BAU), and Woodbridge (maybe could leave? has n of 1 for BAU but does have Ref and SHM data).
-
-```{r filter data}
-# For looking at soc stocks to 100 cm -
-soils_exclude100 <- c("Canton", "Hidalgo", "Pullman", "Kenyon", "Marquis", "Readlyn", "Woodbridge")
-soc_pedon_filt100 <- soc_pedon %>%
-  filter(!soil %in% soils_exclude100)
-write_csv(soc_pedon_filt100, here("data_processed", "05_soc_pedon_100cm.csv"))
-
-# For SOC stocks to 30 cm - can also include Hidalgo soils
-soils_exclude30 <- c("Canton", "Pullman", "Kenyon", "Marquis", "Readlyn", "Woodbridge")
-soc_pedon_filt30 <- soc_pedon %>%
-  filter(!soil %in% soils_exclude30)
-write_csv(soc_pedon_filt30, here("data_processed", "05_soc_pedon_30cm.csv"))
-
-# And the horizon data
-soc_horizon_filt <- soc_horizon_all %>%
-  filter(!soil %in% soils_exclude100)
-write_csv(soc_horizon_filt, here("data_processed", "05_soc_horizon_filtered.csv"))
-```
 
 Use the filtered data to run a mixed linear model of SOC stocks by soil and treatment:
 ``` {r mixed linear model of SOC stocks to 100 cm by label and soil}
@@ -642,10 +625,7 @@ First, make a big mixed linear model for assessing effect of treatment and soil 
 ``` {r surface indicators mixed linear model}
 
 # Filter and pivot data
-surf <- soc_horizon_filt %>%
-  filter(hrzdep_b == "5")
-
-surf_indicator <- surf %>%
+surf_indicator <- surf_filt %>%
   select(dsp_pedon_id, soil, label, soc_stock_hrz, soc_pct, bulk_density, tn_pct:yoder_agg_stab_mwd, p_h:ace) %>%
   pivot_longer(soc_stock_hrz:ace, names_to="indicator", values_to="value")
 
@@ -724,64 +704,3 @@ ggplot(indicator_sig_count, aes(x=fct_reorder(indicator, significant, .desc=TRUE
 ```
 
 # Model stuff
-
-First, need to do some data processing, including fixing incorrect latitude and longitude.
-```{r fix pedon location data}
-project <- read.csv(here("data_raw", "DSP4SH_pedon_mgtv4.csv")) %>%
-  clean_names() %>%
-  mutate(pedon_x2 = ifelse(project=="Illinois" | project=="UConn" | project=="UTRGV", pedon_y, pedon_x), # Illinois, UConn, and UTRGV all have coordinates reversed (y coords are in x column)
-         pedon_y2 = ifelse(project=="Illinois" | project=="UConn" | project=="UTRGV", pedon_x, pedon_y)) %>%
-  select(-pedon_x, -pedon_y) %>%
-  rename(lat = pedon_y2,
-         long = pedon_x2) %>%
-  relocate(lat, .before=long) %>%
-  select(dsp_pedon_id, label_full, label, lu, till, trt, explanation, state, project, soil, site, lat, long)
-
-coords <- project %>%
-  select(project, soil, dsp_pedon_id, lat, long)
-
-just_coords <- coords %>%
-  select(lat, long) %>%
-  rename(x = long,
-         y=lat) %>%
-  relocate(x, .before=y)
-```
-
-Then, pull in MAT/MAP data from WorldClim.
-```{r worldclim data}
-climate <- getData("worldclim", var="bio", res=2.5)
-names(climate) # check naming convention for bioclimatic variables
-# the bioclimatic variables that I want (for now) are BIO1 (MAT) and BIO12 (MAP)
-plot(climate$bio12, main="MAP") # plot MAP as a check
-
-# Make RasterStack of just MAT and MAP
-mat_map <- climate[[c(1,12)]] 
-names(mat_map) <- c("mat_10", "map")
-
-site_dat <- raster::extract(mat_map, just_coords)
-site_clim <- cbind(coords, site_dat) %>%
-  mutate(mat = mat_10/10) %>% # MAT is originally formatted as MAT*10, divide by 10 to get correct number
-  select(-mat_10)
-
-soc_pedon_clim <- soc_pedon100 %>%
-  left_join(site_clim, by=c("dsp_pedon_id", "project", "soil"))
-```
-
-I also want to calculate the average MAT and MAP for each project, so I can make an alternative version of the SOC stock boxplot for Pedometrics where sites are arranged by MAP.
-```{r average mat/map for each site}
-avg_clim <- soc_pedon_clim %>%
-  group_by(soil) %>%
-  summarize(across(map:mat, ~ mean(.x, na.rm = TRUE))) %>%
-  rename(avg_map = map,
-         avg_mat = mat)
-
-soc_pedon_clim2 <- soc_pedon_clim %>%
-  left_join(avg_clim, by="soil")
-  
-
-ggplot(soc_pedon_clim2, aes(x=fct_reorder(soil, avg_map), y=soc_stock_100cm, fill=label)) +
-  geom_boxplot() +
-  labs(x="Soil Series", y="SOC stock to 100 cm depth (Mg/ha)") +
-  scale_fill_viridis(discrete=TRUE, name="Management") +
-  theme_katy()
-```

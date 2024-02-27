@@ -6,19 +6,16 @@
 # 0 - Import data ----
 soc_pedon100 <- read.csv(here("data_processed", "05_soc_pedon_100cm.csv"))
 soc_horizon_filt <- read.csv(here("data_processed", "05_soc_horizon_filtered.csv"))
-soc_horizon_all <- read.csv(here("data_processed", "04_soc_stock_horizon.csv"))
+soc_horizon_all <- read.csv(here("data_processed", "05_soc_horizon_clim_infilt.csv"))
+surf_filt <- read.csv(here("data_processed", "05_surface_horizons_filt.csv"))
+surf_all <- read.csv(here("data_processed","05_surface_horizons.csv"))
 
 # 1 - Plot other indicators vs SOC concentrations/stocks ####
-# Pull out surface horizons only and just look around
-surf <- soc_horizon_filt %>%
-  filter(hrzdep_b == "5")
-write_csv(surf, here("data_processed", "06_surface_horizons.csv"))
-
-ggplot(surf, aes(x=label, y=soc_pct)) +
+ggplot(surf_filt, aes(x=label, y=soc_pct)) +
   geom_boxplot() +
   facet_wrap(~soil, scales="free_y")
 
-ggplot(surf, aes(x=soil_respiration, y=soc_stock_hrz, color=label)) +
+ggplot(surf_filt, aes(x=soil_respiration, y=soc_stock_hrz, color=label)) +
   geom_point() +
   facet_wrap(~soil, scales="free")
 
@@ -26,7 +23,7 @@ ggplot(surf, aes(x=soil_respiration, y=soc_stock_hrz, color=label)) +
 # can we automate with - list of indicators, plot boxplots across soil series x label, ANOVA and generate letters?
 # what are the indicators? soc_pct, soc_stock_hrz, tn_pct:yoder_agg_stab_mwd, p_h:ace
 
-surf_indicator <- surf %>%
+surf_indicator <- surf_filt %>%
   select(dsp_pedon_id, soil, label, soc_stock_hrz, soc_pct, bulk_density, tn_pct:yoder_agg_stab_mwd, p_h:ace) %>%
   pivot_longer(soc_stock_hrz:ace, names_to="indicator", values_to="value")
 
@@ -183,6 +180,22 @@ ggcorrplot(corr_matrix2, p.mat=corr_pmat2, type="lower", lab=TRUE, insig="blank"
   scale_y_discrete(labels=indicator_labs)
 ggsave(here("figs", "surface_indicator_corrplot_reduced.png"), height=6, width=6, units="in")
 
+# this is actually all depths though, is it different in just the surface
+indicators_only_surf <- surf_filt %>%
+  select(bulk_density, soc_pct, tn_pct:yoder_agg_stab_mwd, p_h:ace, clay_pct_field)
+indicators_normalized_surf <- scale(indicators_only_surf)
+
+indicators_red_surf <- indicators_only_surf %>%
+  select(soc_pct, tn_pct, kssl_wsa, ace, pox_c, acid_phosphatase, phosphodiesterase, bglucosidase) %>%
+  scale()
+
+corr_matrix3 <- cor(indicators_red_surf, use="pairwise.complete.obs")
+corr_pmat3 <- cor_pmat(indicators_red_surf)
+ggcorrplot(corr_matrix3, p.mat=corr_pmat3, type="lower", lab=TRUE, insig="blank") +
+  scale_x_discrete(labels=indicator_labs) +
+  scale_y_discrete(labels=indicator_labs)
+# generally similar, just less data
+
 # 6 - Plot indicators that are the most sensitive to treatment ----
 # How i think this might work - do same thing as before but with a map2 to iterate across indicators and projects 
 # start with project and then see if there are common threads between projects??
@@ -235,7 +248,7 @@ ggplot(filter(indicator_sig_count, indicator!="p_h"), aes(x=fct_reorder(indicato
         legend.position = "none")
 ggsave(here("figs", "indicator_sig_count.png"), height=6, width=8, units="in")
 
-# 6 - Plot relationship between SOC and indicators ----
+# 7 - Plot relationship between SOC and indicators ----
 # Mixed model for relationship between SOC and POX-C
 poxc_soc_lmer <- lmer(pox_c ~ soc_pct + (1|label) + (1|soil), data = surf)
 summary(poxc_soc_lmer)
@@ -257,7 +270,7 @@ ggplot(surf, aes(x=soc_pct, y=kssl_wsa)) +
   scale_shape_discrete(name="Management") +
   theme_katy()
 
-# 7 - PCA of indicators ----
+# 8 - PCA of indicators ----
 # Try PCA
 indicator_pca <- princomp(corr_matrix) # can't run PCA because there are some comparisons that don't have data
 summary(indicator_pca)
@@ -323,3 +336,66 @@ ggsave(here("figs", "indicators_pca_mgmt.png"), width=8, height=6, units="in")
 # Put two together in a grid
 plot_grid(pca_soil, pca_mgmt)
 ggsave(here("figs", "indicator_pca_grid.png"), width=16, height=6, units="in")
+
+# 9 - Grouped analysis of indicator sensitivity in surface soils across all projects ----
+# Attach climate data to horizon data
+surf_ind_all_pivot <- surf_all %>%
+  select(dsp_pedon_id, project, soil, label, climate, soc_stock_hrz, soc_pct, cornell_infiltrometer, bulk_density, tn_pct:yoder_agg_stab_mwd, p_h:ace) %>%
+  pivot_longer(soc_stock_hrz:ace, names_to="indicator", values_to="value")
+
+# ANOVA to test significance of relationship between management and indicators within each project (nested within climate)
+surf_ind_sig <- surf_ind_all_pivot %>%
+  na.omit() %>%
+  group_by(climate, project, indicator) %>% 
+  nest() %>%
+  mutate(anova_obj = map(data, ~anova(aov(value ~ label, data=.x)))) %>%
+  mutate(anova_tidy = map(anova_obj, broom::tidy)) %>%
+  ungroup() %>%
+  transmute(climate, project, indicator, anova_tidy) %>%
+  unnest(cols = c(anova_tidy)) %>%
+  filter(term=="label") %>%
+  mutate(sig = ifelse(p.value<0.05, "significant", "not significant"))
+
+# plot significance of response in each project grouped by climate
+# Manually order projects to cooldry, coolwet, warmdry, and warmwet
+surf_ind_sig$project <- factor(surf_ind_sig$project, 
+                                        levels=c("TexasA&MPt-2", "UnivOfMinnesota","WashingtonState","KansasState",
+                                                 "Illinois","OregonState", "UConn",
+                                                 "UTRGV", "TexasA&MPt-1",
+                                                 "NCState"), ordered=TRUE)
+
+ggplot(surf_ind_sig, aes(x=project, y=indicator, fill=sig)) +
+  geom_tile() +
+  scale_fill_viridis(discrete=TRUE) +
+  geom_rect(xmin=c(0), xmax=c(4.5), ymin=c(0), ymax=c(17.5), color="black", fill=NA )+
+  geom_rect(xmin=c(4.5), xmax=c(7.5), ymin=c(0), ymax=c(17.5), color="black", fill=NA ) +
+  geom_rect(xmin=c(7.5), xmax=c(9.5), ymin=c(0), ymax=c(17.5), color="black", fill=NA )+
+  geom_rect(xmin=c(9.5), xmax=c(10.5), ymin=c(0), ymax=c(17.5), color="black", fill=NA )
+
+# This is potentially useful - I think this is a good start - but there are challenges with this analysis:
+# not sure that indicator sensitivity is the most useful thing to look at. most indicators are sensitive to management in most projects, it seems that most indicators are sensitive to some extenthttp://127.0.0.1:35701/graphics/plot_zoom_png?width=1520&height=763
+# variability mostly seems to exist within individual projects
+
+# maybe it would be helpful to do a PCA and group by cliamte?
+# Difference between this PCA and the one I made previously - this one contains ALL of the projects (including ones with a different soil series in different treatments)
+surf_ind_all <- surf_all %>%
+  select(bulk_density, soc_pct, tn_pct:yoder_agg_stab_mwd, p_h:ace)
+
+nb_all <- estim_ncpPCA(surf_ind_all,method.cv = "Kfold", verbose = FALSE) # estimate the number of components from incomplete data
+nb_all$ncp
+res.comp_all <- imputePCA(surf_ind_all, ncp = nb_all$ncp)
+imp_ind_all <- res.comp_all$completeObs
+imp_pca_all <- prcomp(imp_ind_all, scale.=TRUE)
+summary(imp_pca_all)
+
+pca_clim <- autoplot(imp_pca_all, data=surf_all, colour="climate") +
+  scale_color_viridis(discrete=TRUE, name="Climate") +
+  xlim(c(-.25, .15)) +
+  geom_hline(yintercept=0, linetype="dashed") +
+  geom_vline(xintercept=0, linetype="dashed") +
+  theme_katy()
+
+pca_clim
+ggsave(here("figs", "indicators_pca_clim.png"), width=8, height=6, units="in")
+
+# so - yes - climate looks like a really useful grouping variable here. I think it would make sense to go back to some of the LMEs I had run before and see if climate as a categorical variable explains more variability in management response vs soil series - what can we unpack?
