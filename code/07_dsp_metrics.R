@@ -109,26 +109,7 @@ lmm_sig <- surf_indicator %>%
   arrange(p.value) %>%
   select(indicator, deviance:p.value)
 
-# 4 - Calculate response ratios of indicators ----
-# haven't done this yet
-response_ratios <- surf_indicator %>% 
-  group_by(indicator) %>% 
-  nest() %>%
-  mutate(anova_obj = map(data, ~{
-    lmer_full <- lmer(value ~ label + (1|soil), data = ., REML=FALSE)
-    lmer_reduced <- lmer(value ~ (1|soil), data = ., REML=FALSE)
-    anova(lmer_full, lmer_reduced, text="Chisq")
-  })) %>%
-  mutate(anova_tidy = map(anova_obj, broom::tidy)) %>%
-  ungroup() %>%
-  transmute(indicator, anova_tidy) %>%
-  unnest(cols = c(anova_tidy)) %>%
-  filter(term == "lmer_full") %>%
-  filter(p.value < 0.05) %>%
-  arrange(p.value) %>%
-  select(indicator, deviance:p.value)
-
-# 5 - Correlation matrix to see structure of indicator data ----
+# 4 - Correlation matrix to see structure of indicator data ----
 indicators_only <- soc_horizon_filt %>%
   select(bulk_density, soc_pct, tn_pct:yoder_agg_stab_mwd, p_h:ace, clay_pct_field)
 indicators_normalized <- scale(indicators_only)
@@ -196,7 +177,7 @@ ggcorrplot(corr_matrix3, p.mat=corr_pmat3, type="lower", lab=TRUE, insig="blank"
   scale_y_discrete(labels=indicator_labs)
 # generally similar, just less data
 
-# 6 - Plot indicators that are the most sensitive to treatment ----
+# 5 - Plot indicators that are the most sensitive to treatment ----
 # How i think this might work - do same thing as before but with a map2 to iterate across indicators and projects 
 # start with project and then see if there are common threads between projects??
 
@@ -248,7 +229,7 @@ ggplot(filter(indicator_sig_count, indicator!="p_h"), aes(x=fct_reorder(indicato
         legend.position = "none")
 ggsave(here("figs", "indicator_sig_count.png"), height=6, width=8, units="in")
 
-# 7 - Plot relationship between SOC and indicators ----
+# 6 - Plot relationship between SOC and indicators ----
 # Mixed model for relationship between SOC and POX-C
 poxc_soc_lmer <- lmer(pox_c ~ soc_pct + (1|label) + (1|soil), data = surf)
 summary(poxc_soc_lmer)
@@ -270,7 +251,7 @@ ggplot(surf, aes(x=soc_pct, y=kssl_wsa)) +
   scale_shape_discrete(name="Management") +
   theme_katy()
 
-# 8 - PCA of indicators ----
+# 7 - PCA of indicators ----
 # Try PCA
 indicator_pca <- princomp(corr_matrix) # can't run PCA because there are some comparisons that don't have data
 summary(indicator_pca)
@@ -337,7 +318,7 @@ ggsave(here("figs", "indicators_pca_mgmt.png"), width=8, height=6, units="in")
 plot_grid(pca_soil, pca_mgmt)
 ggsave(here("figs", "indicator_pca_grid.png"), width=16, height=6, units="in")
 
-# 9 - Grouped analysis of indicator sensitivity in surface soils across all projects ----
+# 8 - Grouped analysis of indicator sensitivity in surface soils across all projects ----
 # Attach climate data to horizon data
 surf_ind_all_pivot <- surf_all %>%
   select(dsp_pedon_id, project, soil, label, climate, soc_stock_hrz, soc_pct, cornell_infiltrometer, bulk_density, tn_pct:yoder_agg_stab_mwd, p_h:ace) %>%
@@ -399,3 +380,9 @@ pca_clim
 ggsave(here("figs", "indicators_pca_clim.png"), width=8, height=6, units="in")
 
 # so - yes - climate looks like a really useful grouping variable here. I think it would make sense to go back to some of the LMEs I had run before and see if climate as a categorical variable explains more variability in management response vs soil series - what can we unpack?
+
+# 9 - infiltration ----
+ggplot(surf_all, aes(x=label, y=cornell_infiltrometer)) +
+  geom_boxplot() +
+  facet_wrap(vars(soil))
+

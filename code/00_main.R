@@ -35,6 +35,12 @@ library(cowplot)
 library(missMDA)
 library(ggfortify)
 library(scales)
+library(metafor)
+library(ggpubr)
+library(psych)
+library(GPArotation)
+library(nFactors)
+library(lavaan)
 library(tidyverse)
 
 # 1 - ggplot theme function ####

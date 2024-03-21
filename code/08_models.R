@@ -5,14 +5,14 @@
 soc_pedon100 <- read.csv(here("data_processed", "05_soc_pedon_100cm.csv"))
 soc_horizon_filt <- read.csv(here("data_processed", "05_soc_horizon_filtered.csv"))
 soc_horizon_all <- read.csv(here("data_processed", "05_soc_horizon_clim_infilt.csv"))
-surf <- read.csv(here("data_processed", "05_surface_horizons.csv"))
+surf_all <- read.csv(here("data_processed", "05_surface_horizons.csv"))
 
 # 1 - Build dataframe for modeling ----
 # Want from pedon df: SOC stock to 100 cm, soil, label, lu, till, MAT, MAP, infiltration
 # want from surface df: all the indicators
 # want but don't (yet) have: other state factor data - what should this be??
 
-surf_keep <- surf %>%
+surf_keep <- surf_all %>%
   select(dsp_pedon_id, soc_stock_hrz, soc_pct, bulk_density, tn_pct:yoder_agg_stab_mwd, p_h:ace) # same indicators as before
 
 soc_df <- soc_pedon100 %>%
@@ -76,13 +76,27 @@ summary(stock_sub2)
 
 # Try using climate as a factor in pedon data - what is the best way to determine how much additional varaibility is explained by soil vs climate?
 # stepwise regression?
-soc_pedon100_clim <- soc_pedon100 %>%
-  left_join(site_clim_distinct, by=c("soil", "project"))
-
-soc_mixed_clim <- lmer(soc_stock_100cm ~ label + (1|soil) + (1|climate), data = soc_pedon100_clim)
+soc_mixed_clim <- lmer(soc_stock_100cm ~ label + (1|soil) + (1|climate), data = soc_pedon100)
 summary(soc_mixed_clim)
-# Results of mixed model: soil series and climate each explain about a third of variability not explained by treatment (that seems pretty good to me???)
+# Results of mixed model: soil series and climate each explain about a third of variability not explained by treatment, climate actually explains more (that seems pretty good to me???)
 
 # What are some other good statistical tools for teasing out the role of climate vs soil?
 # I think I made a plot of this for the stoichiometry paper?? try variance partitioning...
+soc_mixed_clim_var <- data.frame(VarCorr(soc_mixed_clim)) %>%
+  select(grp, vcov) %>%
+  rename(group = grp,
+         variance = vcov) 
 
+  tot_var <- soc_mixed_clim_var %>%
+  summarize(sum_var = sum(variance))
+temp <- cbind(soc_mixed_clim_var, tot_var)
+
+soc_mixed_clim_var_pct <- temp %>%
+  mutate(pct_var = (variance/sum_var)*100) %>%
+  select(group, pct_var)
+
+# maybe actually can encode treatment as a random factor as well in order to partition variance between soil, climate, and treatment. next treatment within soil?? think about this...
+soc_mixed_clim2 <- lmer(soc_stock_100cm ~ (1|label) + (1|soil) + (1|climate), data = soc_pedon100)
+summary(soc_mixed_clim2)
+# hehe label explains very little of the variance in SOC stocks compared to soil and climate
+                                 

@@ -1,26 +1,29 @@
 # 03 - Identifying missing lab and field measurements
-# Katy Dynarski, October 2023
+# Katy Dynarski, March 2024
 
 # This script identifies horizons with missing SOC, bulk density, or coarse fragments data (which are all necessary to calculate SOC stocks) and fills that data in to minimize data loss (i.e. having to throw out entire soil profiles because one horizon is missing a measurement). Missing values for a horizon are typically filled with the average value for a generalized horizon within that particular combination of treatment and project
 
-# 0 - Import data ####
-coop_data <- read.csv(here("data_processed", "02_coop_data_horizons_valid.csv"))
+# Working off of a dataframe Ekundayo put together that fills in missing cooperator SOC values with KSSL SOC - the combined values are in a column called "soc_pct_mod"
 
+# 0 - Load libraries and import data ----
+library(aqp)
+library(tidyverse)
+
+coop_data <- read.csv(here("data_processed","02_coop_data_horizons_valid.csv"))
 coop_spc <- coop_data
 
-# 1 - SOC% - Identify missing data ####
+# 1 - SOC% - Identify missing data ----
 no_soc <- coop_data %>%
-  filter(is.na(soc_pct))
-# 99 samples missing SOC% (most of them probably from Texas A&M project with missing SOC)
+  filter(is.na(soc_pct_mod))
+# 27 samples missing SOC% (most of them are from the Texas A&M project where SOC was only measured at KSSL)
 
 # Promote to Soil Profile Collection to take a look at the profiles
 depths(coop_spc) <- dsp_pedon_id ~ hrzdep_t + hrzdep_b
 hzdesgnname(coop_spc) <- 'hzdesg'
 
-# DSP Pedon ID's with missing SOC measurements are Con-6, Con-9, and IL-019-SW-ARBRTM-001
-# Subset for those and plot to see where the SOC measurements are missing
+# Subset for profiles with missing SOC measurements and plot to see where the SOC measurements are missing
 no_soc_spc <- subset(coop_spc, dsp_pedon_id %in% no_soc$dsp_pedon_id)
-plotSPC(no_soc_spc, color="soc_pct")
+plotSPC(no_soc_spc, color="soc_pct_mod")
 
 # 2 - SOC% - Fill missing values based on average SOC for horizon/treatment ####
 
@@ -32,37 +35,42 @@ minn_soc <- subset(coop_spc, project=="UnivOfMinnesota")
 # First, test method in a separate df
 soc_fill_minn <- horizons(minn_soc) %>%
   group_by(label, genhz) %>% # group by generalized horizons within treatment to allow us to get means
-  mutate(soc_fill = na.aggregate(soc_pct)) # fills any NAs with group mean
+  mutate(soc_fill = na.aggregate(soc_pct_mod)) # fills any NAs with group mean
 is.na(soc_fill_minn$soc_fill) # check for any remaining NAs
 
 # Double check fill values are correct
 check <- soc_fill_minn %>%
   group_by(label, genhz) %>%
-  summarize(soc_pct_mean = mean(soc_pct, na.rm=TRUE)) %>%
+  summarize(soc_pct_mean = mean(soc_pct_mod, na.rm=TRUE)) %>%
   unite('label_genhz', label:genhz, remove=FALSE)
 
 no_soc_label <- soc_fill_minn %>%
-  filter(is.na(soc_pct)) %>%
+  filter(is.na(soc_pct_mod)) %>%
   select(label, genhz, soc_fill) %>%
   unite('label_genhz', c('label', 'genhz'), remove=FALSE)
 
 check2 <- check %>%
   filter(label_genhz %in% no_soc_label$label_genhz) %>%
   left_join(no_soc_label, by=c('label', 'genhz', 'label_genhz'))
-check2 # want values in 'soc_fill' and 'soc_pct' to match for each row
+check2 # want values in 'soc_fill' and 'soc_pct_mod' to match for each row
 # yes they are the same
 
 # Repeat in SPC subset to check profile plot
 horizons(minn_soc) <- horizons(minn_soc) %>%
   group_by(label, genhz) %>% # group by generalized horizons 
-  mutate(soc_fill = na.aggregate(soc_pct)) # fills any NAs with group mean
+  mutate(soc_fill = na.aggregate(soc_pct_mod)) # fills any NAs with group mean
 plotSPC(minn_soc, color="soc_fill") # everything is filled
 
 # This works - fill SOC values in actual dataframe
 # Will need to add 'project' as a grouping variable for na.aggregate() so that each filled value represents the average value for that horizon within a treatment for a particular project
 coop_data_soc_filled <- coop_data %>%
   group_by(project, label, genhz) %>%
-  mutate(soc_fill = na.aggregate(soc_pct))
+  mutate(soc_fill = ifelse(is.na(genhz), soc_pct_mod, na.aggregate(soc_pct_mod))) # ifelse statement fills in original values if there is no genhz (and will leave NAs if there are no SOC measurements and no genhz labels), and fills NA data with mean SOC% according to treatment and genhz if there is a genhz label
+
+# Check that that worked
+tam_soc <- coop_data_soc_filled %>%
+  filter(project=="TexasA&MPt-2") %>%
+  select(dsp_pedon_id, project, label, genhz, hrzdep_t, hrzdep_b, soc_pct, soc_pct_mod, soc_fill)
 
 # Check for remaining NAs
 coop_data_soc_filled %>%
@@ -151,31 +159,29 @@ site(ill2) <- ~ site  #promote site to site-level as well
 
 # Examine by treatment
 groupedProfilePlot(ill2, groups='label', color='bulk_density')
-# Bulk density measurements only exist for 100-cm pedons in BAU and Ref
-groupedProfilePlot(ill2, groups='label', color='soc_pct')
+# Bulk density measurements only exist for 100-cm pedons in BAU and Ref (not the deep pedons, and no BD for SHM pedons)
+groupedProfilePlot(ill2, groups='label', color='soc_pct_mod')
 # All pedons have SOC data, though
 
 # Examine by site
 groupedProfilePlot(ill2, groups='site', color='bulk_density')
-# Each site (except for Arboretum) has a full pit (deeper than 100cm), the full pit does not have bulk density measurements but the 100 cm pits do. At the Rothermel site there are no BD measurements. My intuition is to exclude the deeper pits from analysis and just use the 100 cm pits which have data collected for consistent depth intervals (though they have no horizons assigned at these depth intervals).
+# Each site (except for Arboretum) has a full pit (deeper than 100cm), the full pit does not have bulk density measurements but the 100 cm pits do. At the Rothermel site there are no BD measurements. I won't be able to fill in bulk density for those deep horizons, but should be able to fill everything else...
 
-# Step 1 - Exclude deep, "full" pedons - these are the pedons whose DSP Pedon ID ends with A, add a depth class identifier column
+# Step 1 - Add a depth class identifier column
 ill_sub <- horizons(ill_bd) %>%
-  filter(!str_detect(dsp_pedon_id, "A$")) %>% #excludes dsp_pedon_id ending in A
   mutate(hrzdep_t_chr = as.character(hrzdep_t),
          hrzdep_b_chr = as.character(hrzdep_b)) %>%
   unite(depth_class, hrzdep_t_chr:hrzdep_b_chr, sep='-')
 
 # Step 2 - not all the depth classes are the same - use AQP dice() to slice by depth, calculate average BD for each depth
-
 # make SPC
 ill_sub_spc <- ill_sub
 depths(ill_sub_spc) <- dsp_pedon_id ~ hrzdep_t + hrzdep_b
 hzdesgnname(ill_sub_spc) <- 'hzdesg'
 
 # dice
-ill_bd_dice <- dice(ill_sub_spc, fm=0:max(ill_sub_spc) ~ bulk_density + dsp_pedon_id + depth_class)
-plotSPC(ill_bd_dice, color='bulk_density')
+ill_bd_dice <- aqp::dice(ill_sub_spc, fm=0:max(ill_sub_spc) ~ bulk_density + dsp_pedon_id + depth_class)
+plotSPC(ill_bd_dice, color='bulk_density') # this looks horrible but it will work
 
 # Step 3 - fill in the missing data with average bd for that 1 cm slice and calculate mean BD for original depth class
 horizons(ill_bd_dice) <- horizons(ill_bd_dice) %>%
@@ -192,7 +198,7 @@ ill_bd_to_join <- horizons(ill_bd_dice) %>%
 ill_sub_bd_filled <- ill_sub %>%
   left_join(ill_bd_to_join, by=c("dsp_pedon_id", "depth_class")) %>%
   rename(bd_fill = bd_class_avg)
-  
+
 # make a copy to promote to SPC and plot profiles to check that everything looks right
 ill_sub_filled_spc <- ill_sub_bd_filled 
 depths(ill_sub_filled_spc) <- dsp_pedon_id ~ hrzdep_t + hrzdep_b
@@ -245,15 +251,13 @@ coop_data_bd_filled <- bind_rows(ks_bd_filled, ncs_bd_filled, wash_bd_filled, mi
   select(!c('hzID', 'depth_class')) %>% # all data where BD were missing and needed to be calculated
   bind_rows(coop_data_bd_fine)
 
-
-
 # 5 - Coarse Fragments - Identify and fill missing data ####
 # Coarse fragments are a little different than the other two variables we have been looking at - they are needed to calculate SOC stock, but values are often NA in dataframe not because they were overlooked, but because they weren't observed
 
 # It might be easier to start by looking at where there ARE coarse fragments
 coarse <- coop_data %>%
   filter(coarse_frag_volume > 0)
-# Coarse fragments are only identified in two projects - Illinois and UConn
+# Coarse fragments are only identified in three projects - OSU, Illinois and UConn
 # In Illinois, they are only found in deepest horizons (well below 100cm) for the full characterization pedons - can disregard these
 # Let's look at UConn data
 plotSPC(uconn_bd, color='coarse_frag_volume')
@@ -264,7 +268,6 @@ coop_data_coarse_filled <- coop_data %>%
 
 # 6 - Join everything together and write CSV ####
 # We have built three different dataframes containing filled values for SOC, bulk density, and coarse fragments that need to be joined back together
-# Additionally, we have excluded a few pedons from the Illinois project 
 # Do a left join based on bulk density frame (which has the fewest observations)
 # Shrink SOC and CF dataframes so there is less to join in
 
@@ -282,6 +285,6 @@ coop_data_filled <- coop_data_bd_filled %>%
 
 # check for NA values
 na_check <- coop_data_filled %>%
-  filter(is.na(soc_fill) | is.na(bd_fill) | is.na(coarse_frag_fill)) # only NAs left are Texas A&M pt 2 project and bulk density in UTRGV pits below 30 cm, which we are going to leave for now
+  filter(is.na(soc_fill) | is.na(bd_fill) | is.na(coarse_frag_fill)) # only NAs left are som SOC values in Texas A&M pt 2 project, bulk density in UTRGV pits below 30 cm, and bulk density in the deep Illinois pits - can't do anything about that now :)
 
 write_csv(coop_data_filled, here("data_processed", "03_coop_data_filled.csv"))

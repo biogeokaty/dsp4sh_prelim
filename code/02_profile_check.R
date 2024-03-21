@@ -1,10 +1,11 @@
-# 02 - Construct soil profiles for each project and check data quality
-# Katy Dynarski, October 2023
+# Checking profile validity for new DSP4SH data
+# Katy DYnarski, March 2024
 
 # This script constructs a SoilProfileCollection object for each project in the DSP4SH dataset, checks horizon logic, corrects any issues in the data, adds generalized horizon labels to the SPC, builds a corrected dataframe for each project, and re-joins to make a final, corrected dataframe 
 
 # 0 - Load data and identify project list ####
-coop_data <- read.csv(here("data_processed", "01_coop_data_full.csv"))
+coop_data <- read.csv(here("data_raw", "dsp4sh_soc_df_KAD.csv")) %>%
+  clean_names()
 projects <- coop_data %>%
   distinct(project)
 projects
@@ -19,18 +20,15 @@ hzdesgnname(ks) <- 'hzdesg'
 
 # Check that horizon depths make sense
 checkHzDepthLogic(ks) # All are valid except for KeC2 - 3
-kec2_3 <- horizons(ks) %>%
-  filter(str_detect(dsp_pedon_id, "KeC2 - 3"))
-# problem is an incorrectly labelled pedon ID - there is a horizon that actually is in pedon KeC2-2 (based on its dsp_sample_id and dsp_pedon values), but the dsp_pedon_id incorrectly places it in pedon KeC2-3
 
-# this is an easy fix ! check in copy dataframe first
-kec2_3_fix <- kec2_3 %>%
-  mutate(dsp_pedon_id = case_when(dsp_sample_id == "KeC2 - 2-8" ~"KeC2 - 2",
-                                  TRUE ~ dsp_pedon_id)) # when dsp_sample_id is the mislabeled one, changes dsp_pedon_id, leaves dsp_pedon_id for all correct data
+# pull out the incorrect pedon to look at more closely
+kec2_3 <- horizons(ks) %>%
+  filter(str_detect(dsp_pedon_id, "KeC2-3"))
+# problem is an incorrectly labelled pedon ID - there is a horizon that actually is in pedon KeC2-2 (based on its dsp_sample_id and dsp_pedon values), but the dsp_pedon_id incorrectly places it in pedon KeC2-3
 
 # fix in SPC object
 horizons(ks) <- horizons(ks) %>%
-  mutate(dsp_pedon_id = case_when(dsp_sample_id == "KeC2 - 2-8" ~"KeC2 - 2",
+  mutate(dsp_pedon_id = case_when(dsp_sample_id == "KeC2-2-8" ~"KeC2-2",
                                   TRUE ~ dsp_pedon_id))
 
 # Check horizon logic again
@@ -43,9 +41,9 @@ plotSPC(ks, color="soc_pct") # I don't see any gaps in the profiles and all hori
 # Sequence: A, Bt, Btk, Bk 
 n_ks <- c('A', 'Bt', 'Btk', 'Bk') # generalized horizon label sequence
 p_ks <- c('^A',
-       '^Bt$|^Bt1|^Bt2|^Bt3|^Bt4',
-       '^Btk',
-       '^Bk')
+          '^Bt$|^Bt1|^Bt2|^Bt3|^Bt4',
+          '^Btk',
+          '^Bk')
 
 ks$genhz <- generalize.hz(ks$hzdesg, n_ks, p_ks) # generate labels
 
@@ -53,6 +51,7 @@ ks$genhz <- generalize.hz(ks$hzdesg, n_ks, p_ks) # generate labels
 tab_ks <- table(ks$genhz, ks$hzdesg)
 addmargins(tab_ks)
 
+# save corrected dataframe
 ks_corr <- horizons(ks)
 
 # 2 - NCState ####
@@ -62,25 +61,26 @@ ncs <- coop_data %>%
 depths(ncs) <- dsp_pedon_id ~ hrzdep_t + hrzdep_b
 hzdesgnname(ncs) <- 'hzdesg'
 
-checkHzDepthLogic(ncs)
-plotSPC(ncs, color="soc_pct")
+checkHzDepthLogic(ncs) 
+plotSPC(ncs, color="soc_pct") # all good
 
 # Add generalized horizon labels
 # Sequence: A, B, Bt, BC, C
 n_ncs <- c('A', 'B', 'Bt', 'BC', 'C') # generalized horizon label sequence
 p_ncs <- c('^Ap|^A$',
-       '^B$|BA|B/A|A/B|E',
-       '^Bt',
-       '^BC',
-       '^C|\\dC|3Abp|3Bbt')
+           '^B$|BA|B/A|A/B|E',
+           '^Bt',
+           '^BC',
+           '^C|\\dC|3Abp|3Bbt')
 ncs$genhz <- generalize.hz(ncs$hzdesg, n_ncs, p_ncs) # generate labels
 
 # Visually inspect assignment and check that everything looks right
 tab_ncs <- table(ncs$genhz, ncs$hzdesg)
 addmargins(tab_ncs)
 
-plotSPC(ncs, color='genhz') # I'm not really thrilled with this 
+plotSPC(ncs, color='genhz')
 
+# save corrected dataframe
 ncs_corr <- horizons(ncs)
 
 # 3 - Texas A&M pt 1 ####
@@ -97,7 +97,7 @@ plotSPC(tam1, color="soc_pct")
 # Sequence: A, Bt
 n_tam1 <- c('A', 'Bt') # generalized horizon label sequence
 p_tam1 <- c('^Ap|^A$',
-           'Bt')
+            'Bt')
 tam1$genhz <- generalize.hz(tam1$hzdesg, n_tam1, p_tam1) # generate labels
 
 # Visually inspect assignment and check that everything looks right
@@ -118,8 +118,10 @@ hzdesgnname(tam2) <- 'hzdesg'
 checkHzDepthLogic(tam2)
 plotSPC(tam2)
 # Plot appears blank - take a closer look
-horizons_tam2 <- horizons(tam2)
-# There is no SOC data for this project, additionally no horizon designation given in lab data which is why profiles print blank. Not much sense in worrying about this project for now since there is no SOC data :)
+
+tam2_hz <- horizons(tam2)
+# There is no SOC data for this project, additionally no horizon designation given in lab data which is why profiles print blank. 
+# Can use KSSL to fill in missing data
 
 # 5 - WashingtonState ####
 wash <- coop_data %>%
@@ -146,8 +148,8 @@ plotSPC(wash, color="soc_pct")
 # Sequence: A, AB, Bw
 n_wash <- c('A', 'AB', 'Bw') # generalized horizon label sequence
 p_wash <- c('^Ap|^A$',
-           'AB',
-           '^Bw')
+            'AB',
+            '^Bw')
 wash$genhz <- generalize.hz(wash$hzdesg, n_wash, p_wash) # generate labels
 
 # Visually inspect assignment and check that everything looks right
@@ -156,6 +158,7 @@ addmargins(tab_wash)
 
 plotSPC(wash, color='genhz')
 
+# save corrected dataframe
 wash_corr <- horizons(wash)
 
 # 6 - UnivofMinnesota ####
@@ -259,8 +262,8 @@ plotSPC(utrgv, color="soc_pct") # such uniform horizon sampling!
 # Sequence: A, B, B2ca
 n_utrgv <- c('A', 'B', 'BC') # generalized horizon label sequence
 p_utrgv <- c('^A',
-           'B2$',
-           'B2ca')
+             'B2$',
+             'B2ca')
 utrgv$genhz <- generalize.hz(utrgv$hzdesg, n_utrgv, p_utrgv) # generate labels
 
 # Visually inspect assignment and check that everything looks right
@@ -293,15 +296,15 @@ depths(uconn_valid) <- dsp_pedon_id ~ hrzdep_t + hrzdep_b
 hzdesgnname(uconn_valid) <- 'hzdesg'
 
 checkHzDepthLogic(uconn_valid)
-plotSPC(uconn_valid, color="soc_pct") # Some of these profiles are shallow, but some are really deep. This project is kind of odd.
+plotSPC(uconn_valid, color="soc_pct") # Some of these profiles are shallow, but some are really deep.
 
 # Add generalized horizon labels
 # Sequence: A, Bw, BC, C
 n_uconn <- c('A', 'Bw', 'BC', 'C') # generalized horizon label sequence
 p_uconn <- c('A',
-           '^Bw|Bw$',
-           '^BC',
-           '^C')
+             '^Bw|Bw$',
+             '^BC',
+             '^C')
 uconn_valid$genhz <- generalize.hz(uconn_valid$hzdesg, n_uconn, p_uconn) # generate labels
 
 # Visually inspect assignment and check that everything looks right
@@ -313,7 +316,7 @@ plotSPC(uconn_valid, color='genhz')
 uconn_corr <- horizons(uconn_valid)
 
 # 11 - Re-join data for corrected project dataset and write CSV ####
-coop_corr <- bind_rows(ks_corr, ncs_corr, tam1_corr, tam2, wash_corr, minn_corr, osu_corr, ill_corr, utrgv_corr, uconn_corr) %>%
+coop_corr <- bind_rows(ks_corr, ncs_corr, tam1_corr, tam2_hz, wash_corr, minn_corr, osu_corr, ill_corr, utrgv_corr, uconn_corr) %>%
   select(!hzID)
 coop_corr_spc <- coop_corr
 
