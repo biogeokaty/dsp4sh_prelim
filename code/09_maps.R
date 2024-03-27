@@ -2,7 +2,7 @@
 # Katy Dynarski
 
 # 0 - Load data ----
-project <- read.csv(here("data_processed", "07_project_data.csv"))
+project <- read.csv(here("data_processed", "05_project_data.csv"))
 
 # 1 - Map of all DSP4SH projects ----
 # Download map of USA from NaturalEarth as basemap
@@ -13,6 +13,7 @@ usa_ne <- ne_states(country="united states of america")
 # Many projects have more than one type of treatment within a label - look at the data to be able to write a description that generally covers things: 
 project_distinct <- project %>%
   distinct(project, label, lu, till, trt, explanation)
+flextable(project_distinct)
 
 # Write tibble of annotation for each project/label based on project_distinct
 annotation <- tibble(project=c(rep("Illinois", 3), 
@@ -27,34 +28,34 @@ annotation <- tibble(project=c(rep("Illinois", 3),
                                rep("WashingtonState", 3)),
                      label=c(rep(c("BAU", "Ref", "SHM"), 7), "BAU", "Ref", rep(c("BAU", "Ref", "SHM"), 2)),
                      annotation=c("BAU: Conventional and organic corn-soybean rotation",
-                "Ref: Forest restored in 1990",
-                "SHM: No-till corn-soybean rotation",
-                "BAU: Diverse crops with conventional tillage",
-                "Ref: Native rangeland",
-                "SHM: No-till diverse crops and cover cropping",
-                "BAU: Wheat and corn with conventional tillage",
-                "Ref: Forest",
-                "SHM: Hayed perennial grass",
-                "BAU: Ryegrass and Christmas tree with tillage",
-                "Ref: Timber forest and hazelnut orchard",
-                "SHM: No-till grass and vineyard",
-                "BAU: Cropping with conventional tillage",
-                "Ref: Native rangeland",
-                "SHM: No-till rye and mixed crops",
-                "BAU: Wheat and sorghum with conventional tillage",
-                "Ref: Native perennial forage",
-                "SHM: No-till wheat and sorghum",
-                "BAU: Corn with conventional tillage",
-                "Ref: Forest",
-                "SHM: No-till corn and hay",
-                "BAU: Diverse crops with conventional tillage",
-                "Ref: Native forest",
-                "BAU: Soybean with conventional tillage",
-                "Ref: Native rangeland",
-                "SHM: No-till soybean",
-                "BAU: Cropping with conventional tillage",
-                "Ref: Perennial grassland",
-                "SHM: No-till cropping"))
+                                  "Ref: Forest restored in 1990",
+                                  "SHM: No-till corn-soybean rotation",
+                                  "BAU: Diverse crops with conventional tillage",
+                                  "Ref: Native rangeland",
+                                  "SHM: No-till diverse crops and cover cropping",
+                                  "BAU: Wheat and corn with conventional tillage",
+                                  "Ref: Forest",
+                                  "SHM: Hayed perennial grass",
+                                  "BAU: Ryegrass and Christmas tree with tillage",
+                                  "Ref: Timber forest and hazelnut orchard",
+                                  "SHM: No-till grass and vineyard",
+                                  "BAU: Cropping with conventional tillage",
+                                  "Ref: Native rangeland",
+                                  "SHM: No-till rye and mixed crops",
+                                  "BAU: Wheat and sorghum with conventional tillage",
+                                  "Ref: Native perennial forage",
+                                  "SHM: No-till wheat and sorghum",
+                                  "BAU: Corn with conventional tillage",
+                                  "Ref: Forest",
+                                  "SHM: No-till corn and hay",
+                                  "BAU: Diverse crops with conventional tillage",
+                                  "Ref: Native forest",
+                                  "BAU: Soybean with conventional tillage",
+                                  "Ref: Native rangeland",
+                                  "SHM: No-till soybean",
+                                  "BAU: Cropping with conventional tillage",
+                                  "Ref: Perennial grassland",
+                                  "SHM: No-till cropping"))
 
 # Get unique soil series
 project_soil <- project %>%
@@ -63,13 +64,13 @@ project_soil <- project %>%
   mutate(count = paste("soil",seq(n()), sep="_")) %>%
   pivot_wider(names_from=count, values_from=soil) %>%
   unite("soils", soil_1:soil_3, sep=", ", na.rm=TRUE)
-  
+flextable(project_soil)
 
 # Make annotation dataframe that includes project, label, soil, and xy coords
 project_annotate <- project %>% 
   group_by(project, label) %>%
-  mutate(avg_lat = mean(lat, na.rm=TRUE),
-         avg_long = mean(long, na.rm=TRUE)) %>%
+  mutate(avg_lat = mean(pedon_y, na.rm=TRUE),
+         avg_long = mean(pedon_x, na.rm=TRUE)) %>%
   distinct(project, label, avg_lat, avg_long) %>%
   left_join(annotation, by=c("project", "label")) %>%
   left_join(project_soil, by="project")
@@ -84,9 +85,9 @@ project_labs <- project_annotate %>%
                                           ifelse(project=="UTRGV", "University of Texas - Rio Grande Valley",
                                                  ifelse(project=="KansasState", "Kansas State University",
                                                         ifelse(project=="NCState", "North Carolina State University",
-ifelse(project=="TexasA&MPt-1", "Texas A&M - 1",
-ifelse(project=="TexasA&MPt-2", "Texas A&M - 2",
-       ifelse(project=="UnivOfMinnesota", "University of Minnesota", "Washington State University"))))))))))
+                                                               ifelse(project=="TexasA&MPt-1", "Texas A&M - 1",
+                                                                      ifelse(project=="TexasA&MPt-2", "Texas A&M - 2",
+                                                                             ifelse(project=="UnivOfMinnesota", "University of Minnesota", "Washington State University"))))))))))
 
 # Make map
 ggplot(data=usa_ne) +
@@ -102,14 +103,13 @@ ggplot(data=usa_ne) +
   theme_classic() +
   easy_remove_axes() +
   theme(legend.position="none")
-ggsave(here("figs", "project_map.png"), height=6, width=8, units="in")
+ggsave(here("figs", "project_map.png"), height=6.5, width=8, units="in")
 
 # 2 - Table of project information ----
 project_table <- project_annotate %>%
   group_by(project) %>%
   select(project, soils, annotation) %>%
   separate_wider_delim(annotation, delim=": ", names=c("label", "description")) %>%
-  ungroup() %>%
-  gt()
-
-gtsave(project_table, here("figs", "project_table.html"))
+  ungroup()
+flextable(project_table)
+write_csv(project_table, here("figs", "project_descriptions.csv"))

@@ -1,93 +1,73 @@
-# 07 - Big Silly Models
-# Katy Dynarski, December 2023/January 2024
-
+# 07 - Modeling relationships between SOC and indicators/soils/climate
+# Katy Dynarski, March 2024
 # 0 - Import data ----
-soc_pedon100 <- read.csv(here("data_processed", "05_soc_pedon_100cm.csv"))
-soc_horizon_filt <- read.csv(here("data_processed", "05_soc_horizon_filtered.csv"))
-soc_horizon_all <- read.csv(here("data_processed", "05_soc_horizon_clim_infilt.csv"))
-surf_all <- read.csv(here("data_processed", "05_surface_horizons.csv"))
+meta_df <- read.csv(here("data_processed", "05_meta_df.csv"))
 
 # 1 - Build dataframe for modeling ----
-# Want from pedon df: SOC stock to 100 cm, soil, label, lu, till, MAT, MAP, infiltration
-# want from surface df: all the indicators
-# want but don't (yet) have: other state factor data - what should this be??
-
-surf_keep <- surf_all %>%
-  select(dsp_pedon_id, soc_stock_hrz, soc_pct, bulk_density, tn_pct:yoder_agg_stab_mwd, p_h:ace) # same indicators as before
-
-soc_df <- soc_pedon100 %>%
-  left_join(surf_keep, by="dsp_pedon_id") %>%
+soc_df <- meta_df %>%
   mutate(across(where(is.character), as.factor)) %>%
   filter(!is.na(soc_stock_100cm)) # Filter out rows with no SOC stock data - they mess with the random forest model later on
 
 # 3 - Ctree and cforest ----
 # Try a ctree - with land use variables and top 5 soil health metrics
 soc_tree <- ctree(soc_stock_100cm ~ soc_pct + ace + bglucosidase + yoder_agg_stab_mwd + kssl_wsa + bglucosaminidase +
-                         label + lu + till + soil + mat + map + cornell_infiltrometer, data=soc_df)
+                    label + lu + till + soil + mat + map, data=soc_df)
 plot(soc_tree)
 # Soil series is the most important determinant, followed by SOC%
 
 # try a version that doesn't include soil series - want to look at the underlying factors integrated by soil series
 soc_tree2 <- ctree(soc_stock_100cm ~ soc_pct + ace + bglucosidase + yoder_agg_stab_mwd + kssl_wsa + bglucosaminidase +
-                    label + lu + till + mat + map, data=soc_df)
+                     label + lu + till + mat + map, data=soc_df)
 plot(soc_tree2)
 # SOC% is the most important thing...well duh. SOC stocks are driven by how much soil carbon is there. Should take that out of the tree...
 
 soc_tree3 <- ctree(soc_stock_100cm ~ ace + bglucosidase + yoder_agg_stab_mwd + kssl_wsa + bglucosaminidase +
                      label + lu + till + mat + map, data=soc_df)
 plot(soc_tree3)
-# Now we're getting somewhere...First split is MAP, followed by ACE, then bglucosaminidase, then treatment (!)
+# Now we're getting somewhere...First split is MAT, followed by ACE/MAP, then land use and treatment
 
 # Try as a forest
+# Should include soil series in this analysis to see if this provides more data than MAT/MAP
 soc_forest <- cforest(soc_stock_100cm ~ ace + bglucosidase + yoder_agg_stab_mwd + kssl_wsa + bglucosaminidase +
-                        label + lu + till + mat + map, data=soc_df, ntree=10000)
+                        label + lu + till + mat + map + soil, data=soc_df, ntree=10000)
 soc_vi <- vi(soc_forest)
 soc_vip <- vip(soc_vi, geom="col")
 soc_vip
 
-# Most important variables for predicting SOC stocks to 100 cm are: ACE, MAT, MAP, land use, and KSSL WSA
+# Most important variables for predicting SOC stocks to 100 cm are: soil, MAT, ACE, MAP, land use, label, and tillage
 
-# Treatment (BAU vs SHM vs Ref) was the second least useful variable - but it is also the most general land-use variable here so that makes sense
+# I'm not sure if the indicators (bglucosaminidase, bglucosidase, KSSL WSA, and Yoder agg stab) being less important is due to missing data for some of those measurements in some projects
 
-# The question with indicators - how much variance is driven by soil series and how much variance is driven by treatment (and does this matter if we can still pick up the effect of treatment) 
+# 4 - Linear models to predict SOC stocks based on top variables ----
+stock_lm1 <- lm(soc_stock_100cm ~ soil + mat + ace + map + lu + till, data=soc_df)
+summary(stock_lm1) # This is a decent model, R2 of 0.78, p<0.001
 
-# Is it useful to break treatment down into land use and tillage? 
-
-# 4 - Can we predict SOC stocks via the other metrics ----
-stock_lm1 <- lm(soc_stock_100cm ~ yoder_agg_stab_mwd + soil_respiration + bglucosidase + bglucosaminidase + 
-                 alkaline_phosphatase + acid_phosphatase + phosphodiesterase + arylsulfatase + pox_c + ace, data=soc_df)
-summary(stock_lm1) # This is not a very good model. R2 0.19, only ace and bglucosidase are significant
-# It's really hard to model this with so many variables because 
-stock_sub1 <- regsubsets(soc_stock_100cm ~ soc_pct + yoder_agg_stab_mwd + soil_respiration + bglucosidase + bglucosaminidase + 
-                          alkaline_phosphatase + acid_phosphatase + phosphodiesterase + arylsulfatase + pox_c + ace, data=soc_df)
+# Try regular subsets to see if model can be reduced
+stock_sub1 <- regsubsets(soc_stock_100cm ~ soil + mat + ace + map + lu + till, data=soc_df)
 summary(stock_sub1)
+# if you're only going to keep three variables, they would be soil series, MAT, and MAP
 
-stock_lm2 <- lm(ssoc_stock_100cm ~ soc_pct + yoder_agg_stab_mwd + soil_respiration + bglucosidase + bglucosaminidase + 
-                  alkaline_phosphatase + acid_phosphatase + phosphodiesterase + arylsulfatase + pox_c + ace, data=soc_df)
+stock_lm2 <- lm(soc_stock_100cm ~ soil + mat + map, data=soc_df)
 summary(stock_lm2)
-stock_sub2 <- regsubsets(soc_stock_100cm ~ soc_pct + yoder_agg_stab_mwd + soil_respiration + bglucosidase + bglucosaminidase + 
-                           alkaline_phosphatase + acid_phosphatase + phosphodiesterase + arylsulfatase + pox_c + ace, data=soc_df)
-summary(stock_sub2)
+# this is almost as good of a model as the full one, R2 is 0.76
 
-# There's some really interesting stuff in here - 0-5cm SOC % is by far the best predictor of overall SOC stocks. This makes sense (soils with the most SOC throughout the profile should also have the most SOC in the surface horizon).
+stock_lm3 <- lm(soc_stock_100cm ~ mat + map, data=soc_df)
+summary(stock_lm3)
+# Lose a lot of explanatory power when you take out the 
 
-# In models with SOC included, metrics like POX-C and ACE don't contribute much extra information (they are basically a proxy for carbon) and get kicked out of the model. Enzyme activity is a much more important variable. But in models without SOC included, ACE is the most important variable (probably because it approximates SOC) followed by bglucosidase
+# 5 - Teasing out importance of climate vs soil in driving SOC stocks ----
 
-
-# Try using climate as a factor in pedon data - what is the best way to determine how much additional varaibility is explained by soil vs climate?
-# stepwise regression?
-soc_mixed_clim <- lmer(soc_stock_100cm ~ label + (1|soil) + (1|climate), data = soc_pedon100)
+# try mixed linear model with variance partitioning
+soc_mixed_clim <- lmer(soc_stock_100cm ~ (1|soil) + (1|mat) + (1|map), data = soc_df)
 summary(soc_mixed_clim)
 # Results of mixed model: soil series and climate each explain about a third of variability not explained by treatment, climate actually explains more (that seems pretty good to me???)
 
-# What are some other good statistical tools for teasing out the role of climate vs soil?
-# I think I made a plot of this for the stoichiometry paper?? try variance partitioning...
 soc_mixed_clim_var <- data.frame(VarCorr(soc_mixed_clim)) %>%
   select(grp, vcov) %>%
   rename(group = grp,
          variance = vcov) 
 
-  tot_var <- soc_mixed_clim_var %>%
+tot_var <- soc_mixed_clim_var %>%
   summarize(sum_var = sum(variance))
 temp <- cbind(soc_mixed_clim_var, tot_var)
 
@@ -95,8 +75,60 @@ soc_mixed_clim_var_pct <- temp %>%
   mutate(pct_var = (variance/sum_var)*100) %>%
   select(group, pct_var)
 
-# maybe actually can encode treatment as a random factor as well in order to partition variance between soil, climate, and treatment. next treatment within soil?? think about this...
-soc_mixed_clim2 <- lmer(soc_stock_100cm ~ (1|label) + (1|soil) + (1|climate), data = soc_pedon100)
-summary(soc_mixed_clim2)
-# hehe label explains very little of the variance in SOC stocks compared to soil and climate
-                                 
+# could also try partial correlations...
+
+# 6 - Climate patterns in other indicators ----
+# Want to know if climate is a significant driver in other indicator values (it probably is)
+ind_long <- meta_df %>%
+  select(project, dsp_pedon_id, soil, label, climate, mat, map, lu, till, soc_stock_0_30cm, soc_stock_100cm, 
+         soc_pct:yoder_agg_stab_mwd, soil_respiration:ace) %>%
+  pivot_longer(soc_pct:ace, names_to="indicator", values_to="value")
+
+# Make a version of the model with soil, MAT/MAP, land use, and tillage as predictors
+ind_lm <- ind_long %>%
+  na.omit() %>%
+  group_by(indicator) %>% 
+  nest() %>%
+  mutate(lm_obj = map(data, ~lm(value ~ soil + mat + map + lu + till, data=.x))) %>%
+  mutate(lm_tidy = map(lm_obj, broom::glance)) %>%
+  ungroup() %>%
+  transmute(indicator, lm_tidy) %>%
+  unnest(cols = c(lm_tidy)) %>%
+  mutate(sig = ifelse(p.value<0.05, "significant", "not significant")) %>%
+  arrange(desc(adj.r.squared)) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3)))
+flextable(ind_lm)
+
+# try a version with no soil
+ind_lm_clim <- ind_long %>%
+  na.omit() %>%
+  group_by(indicator) %>% 
+  nest() %>%
+  mutate(lm_obj = map(data, ~lm(value ~ mat + map + lu + till, data=.x))) %>%
+  mutate(lm_tidy = map(lm_obj, broom::glance)) %>%
+  ungroup() %>%
+  transmute(indicator, lm_tidy) %>%
+  unnest(cols = c(lm_tidy)) %>%
+  mutate(sig = ifelse(p.value<0.05, "significant", "not significant")) %>%
+  arrange(desc(adj.r.squared)) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3)))
+flextable(ind_lm_clim)
+
+# and a version with only MAT and MAP
+ind_lm_clim2 <- ind_long %>%
+  na.omit() %>%
+  group_by(indicator) %>% 
+  nest() %>%
+  mutate(lm_obj = map(data, ~lm(value ~ mat + map, data=.x))) %>%
+  mutate(lm_tidy = map(lm_obj, broom::glance)) %>%
+  ungroup() %>%
+  transmute(indicator, lm_tidy) %>%
+  unnest(cols = c(lm_tidy)) %>%
+  mutate(sig = ifelse(p.value<0.05, "significant", "not significant")) %>%
+  arrange(desc(adj.r.squared)) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3)))
+flextable(ind_lm_clim2)
+
+# Overall findings from this:
+# Soil has the most explanatory power - R2 is always higher when soil is included as a variable in the model. Climate on its own still explains a lot, but without land use and tillage as factors, R2 maxes out at .5 (which is still pretty high to be honest)
+# What is the best way to display this information??
