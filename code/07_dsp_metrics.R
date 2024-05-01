@@ -7,10 +7,11 @@
 surf <- read.csv(here("data_processed","05_surface_horizons.csv"))
 
 # 1 - Boxplots of all indicators across soils and managements ----
+# 1.1 - Boxplots for each indicator (x axis is project) ----
 # can we automate with - list of indicators, plot boxplots across soil series x label, ANOVA and generate letters?
 # what are the indicators? soc_pct, soc_stock_hrz, tn_pct:yoder_agg_stab_mwd, p_h:ace
 surf_long <- surf %>%
-  select(dsp_pedon_id, soil, project, label, climate, soc_pct, bulk_density, tn_pct:yoder_agg_stab_mwd, p_h:ace) %>%
+  select(dsp_pedon_id, soil, project, label, lu, climate, soc_pct, bulk_density, tn_pct:yoder_agg_stab_mwd, p_h:ace) %>%
   pivot_longer(soc_pct:ace, names_to="indicator", values_to="value")
 
 # Make list of indicators for purrr
@@ -27,11 +28,13 @@ surf_long %>%
   ggplot(aes(x = project, y = value, fill=label)) +
   geom_boxplot() +
   labs(x="Project", 
-       y=glue::glue({unique(filter(surf_long, indicator==.x)$indicator)}), 
-       title=glue::glue("0-10 cm Indicator Values under Contrasting Management - ", 
-                        {unique(filter(surf_long, indicator==.x)$indicator)})) +
+       y=glue::glue({filter(indicator_labs_df, indicator==.x)$label}), 
+       title=glue::glue("0-10 cm Indicator Values - ", 
+                        {filter(indicator_labs_df, indicator==.x)$label})) +
   scale_fill_viridis(discrete=TRUE, name="Management") +
-  theme_katy()
+  theme_katy() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+
 ggsave(here("figs/indicator_boxplots", "test.png"), 
        width=10, height=7, units="in", dpi=400)
 
@@ -43,16 +46,18 @@ plot_list <- map(.x = indicators,
                      ggplot(aes(x = project, y = value, fill=label)) +
                      geom_boxplot() +
                      labs(x="Project", 
-                          y=glue::glue({unique(filter(surf_long, indicator==.x)$indicator)}), 
-                          title=glue::glue("0-10 cm Indicator Values under Contrasting Management - ", 
-                                           {unique(filter(surf_long, indicator==.x)$indicator)})) +
+                          y=glue::glue({filter(indicator_labs_df, indicator==.x)$label}), 
+                          title=glue::glue("0-10 cm Indicator Values - ", 
+                                           {filter(indicator_labs_df, indicator==.x)$label})) +
                      scale_fill_viridis(discrete=TRUE, name="Management") +
-                     theme_katy()
+                     theme_katy() +
+                     theme(axis.text.x = element_text(angle = 45, hjust=1))
                    
                    ggsave(here("figs/indicator_boxplots", glue::glue("indicator_", .x, ".png")), 
                           width=10, height=7, units="in", dpi=400)
                  })
 
+# 1.2 - Facet wrap of all indicators for each project ----
 # Also want to make a version with a facet wrap of all indicators for each project - to see which indicators are measured in which projects
 projects <- surf_long %>%
   distinct(project) %>%
@@ -65,7 +70,7 @@ plot_list2 <- map(.x = projects,
                      filter(project == .x) %>%
                      ggplot(aes(x=label, y=value, fill=label)) +
                      geom_boxplot() +
-                     facet_wrap(vars(indicator), scales="free_y") +
+                     facet_wrap(vars(indicator), scales="free_y", labeller=labeller(indicator=indicator_labs)) +
                      scale_fill_viridis(discrete=TRUE, name="Management") +
                      labs(x="Management", 
                           title=glue::glue("0-10 cm Indicator Values - ", 
@@ -73,30 +78,84 @@ plot_list2 <- map(.x = projects,
                      theme_katy()
                    
                    ggsave(here("figs/indicator_boxplots_projects", glue::glue("project_", .x, ".png")), 
-                          width=10, height=7, units="in", dpi=400)
+                          width=12, height=10, units="in", dpi=400)
                  })
+
+# 1.3 - boxplot of two most common indicators with MAP ----
+# Make a version that plots two most commonly measured indicators - BG and POXC - alongside MAP
+# Calculate site mean climate data
+site_clim_dist <- project %>%
+  distinct(project, climate)
+
+site_clim_sum <- project %>%
+  group_by(project) %>%
+  summarize(across(mat:map, ~ mean(.x, na.rm = TRUE))) %>%
+  left_join(site_clim_dist, by="project")
+
+# Join to soils data
+surf_avg_clim <- surf %>%
+  left_join(select(site_clim_sum, project, mat, map), by="project", suffix=c("_pedon", "_site"))
+
+# Plot - make one line plot that shows precipitation across sites, then plot on top of boxplots
+map_plot <- ggplot(surf_avg_clim, aes(x=fct_reorder(soil, map_site), y=map_site)) +
+  geom_point(color="dodgerblue4") +
+  geom_line(aes(group=1), color="dodgerblue2") +
+  labs(x="Soil", y="MAP (mm)") +
+  theme_katy_grid() +
+  easy_remove_x_axis() 
+
+poxc_box <- ggplot(surf_avg_clim, aes(x=fct_reorder(soil, map_site), y=pox_c, fill=label)) +
+  geom_boxplot() +
+  labs(x="Soil", y="POX-C") +
+  scale_fill_viridis(discrete=TRUE, name="Management") +
+  theme_katy_grid() +
+  easy_remove_x_axis()
+
+bg_box <- ggplot(surf_avg_clim, aes(x=fct_reorder(soil, map_site), y=bglucosidase, fill=label)) +
+  geom_boxplot() +
+  labs(x="Soil", y=expression(beta*"-glucosidase activity")) +
+  scale_fill_viridis(discrete=TRUE, name="Management") +
+  theme_katy_grid() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+ind_grid <- plot_grid(map_plot,
+                      poxc_box + theme(legend.position="none"), 
+                      bg_box + theme(legend.position="none"), 
+                      ncol=1, rel_heights=c(.5, 1, 1.25), align="v")
+
+ind_leg <- get_legend(bg_box + theme(legend.box.margin = margin(0, 0, 0, 12)))
+
+ind_full <- plot_grid(ind_grid, ind_leg, rel_widths = c(3, .4))
+ind_full
+ggsave(here("figs", "indicator_patt_precip.png"), width=11, height=9, units="in", dpi=400)
+
+# 1.4 - Table of mean indicator values in reference, SHM, and BAU systems ----
+indicator_summary_wide <- surf_long %>%
+  group_by(project, label, indicator) %>%
+  summarize(across(value, mean_sd)) %>%
+  na.omit() %>%
+  unite("summary", value_mean:value_sd) %>%
+  pivot_wider(names_from=indicator, values_from=summary)
+
+write_csv(indicator_summary_wide, here("figs", "indicator_summary_wide.csv"))
+
+indicator_summary_ref <- indicator_summary_wide %>%
+  filter(label=="Ref")
+write_csv(indicator_summary_ref, here("figs", "indicator_summary_ref.csv"))
+
+# 1.5 - Table of mean indicator values by land use ----
+indicator_summary_lu <- surf_long %>%
+  group_by(lu, label, indicator) %>%
+  summarize(across(value, mean_sd)) %>%
+  na.omit() %>%
+  unite("summary", value_mean:value_sd) %>%
+  pivot_wider(names_from=indicator, values_from=summary)
+write_csv(indicator_summary_lu, here("figs", "indicator_summary_lu.csv"))
 
 # 2 - Correlation matrix to see structure of indicator data ----
 indicators_only <- surf %>%
   select(bulk_density, soc_pct, tn_pct:yoder_agg_stab_mwd, p_h:ace)
 indicators_normalized <- scale(indicators_only)
-
-# Make vector of indicator labels so they will print nicely
-indicator_labs <- c("soc_pct" = "SOC %",
-                    "bglucosaminidase" = "B-glucosaminidase",
-                    "ace" = "ACE",
-                    "bglucosidase" = "B-glucosidase",
-                    "kssl_wsa" = "Aggregate stability (KSSL)",
-                    "yoder_agg_stab_mwd" = "Aggregate stability (MWD)",
-                    "arylsulfatase" = "Arylsulfatase",
-                    "pox_c" = "POX-C",
-                    "tn_pct" = "Total N%",
-                    "bulk_density" = "Bulk density",
-                    "soil_respiration" = "Respiration",
-                    "phosphodiesterase" = "Phosphodiesterase",
-                    "alkaline_phosphatase" = "Alkaline phosphatase",
-                    "acid_phosphatase" = "Acid phosphatase",
-                    "p_h" = "pH")
 
 # Plot correlation matrix
 corr_matrix <- cor(indicators_normalized, use="pairwise.complete.obs")
@@ -104,11 +163,11 @@ corr_pmat <- cor_pmat(indicators_normalized)
 ggcorrplot(corr_matrix, p.mat=corr_pmat, hc.order=TRUE, type="lower", lab=TRUE, insig="blank") +
   scale_x_discrete(labels=indicator_labs) +
   scale_y_discrete(labels=indicator_labs)
-ggsave(here("figs", "surface_indicator_corrplot.png"), height=9, width=9, units="in")
+ggsave(here("figs", "surface_indicator_corrplot.png"), height=9, width=9, units="in", dpi=400)
 
 # Make a smaller version of correlation matrix for presentation
 indicators_red <- indicators_only %>%
-  select(soc_pct, tn_pct, kssl_wsa, ace, pox_c, acid_phosphatase, phosphodiesterase, bglucosidase) %>%
+  select(soc_pct, tn_pct, kssl_wsa, ace, pox_c, acid_phosphatase, phosphodiesterase, bglucosidase, arylsulfatase) %>%
   scale()
 
 corr_matrix2 <- cor(indicators_red, use="pairwise.complete.obs")
@@ -116,9 +175,71 @@ corr_pmat2 <- cor_pmat(indicators_red)
 ggcorrplot(corr_matrix2, p.mat=corr_pmat2, type="lower", lab=TRUE, insig="blank") +
   scale_x_discrete(labels=indicator_labs) +
   scale_y_discrete(labels=indicator_labs)
-ggsave(here("figs", "surface_indicator_corrplot_reduced.png"), height=6, width=6, units="in")
+ggsave(here("figs", "surface_indicator_corrplot_reduced.png"), height=6, width=6, units="in", dpi=400)
 
-# 3 - Plot indicators that are the most sensitive to treatment (ANOVA) ----
+# 3 - PCA of indicators ----
+# Prcomp will not work with missing values - Can impute the missing values with missMDA package!!
+# prcomp is preferable to princomp because princomp uses a spectral decomposition approach (examines covariances between variables) and prcomp uses singular value decomposition, which examines covariances between individuals - supposed to have slightly better numerical accuracy
+nb <- estim_ncpPCA(indicators_only,method.cv = "Kfold", verbose = FALSE) # estimate the number of components from incomplete data
+nb$ncp
+res.comp <- imputePCA(indicators_only, ncp = nb$ncp)
+imp_ind <- res.comp$completeObs
+imp_pca <- prcomp(imp_ind, scale.=TRUE)
+summary(imp_pca)
+
+# plot screeplot with fviz_eig() from factoextra 
+fviz_eig(imp_pca)
+
+# Plot loadings using factoextra
+show_col(viridis_pal(option="plasma")(6)) # show hex codes for viridis color palette option plasma so I can pull them into a PCA plot
+
+pca_loadings <- fviz_pca_var(imp_pca,
+                             col.var = "contrib", # Color by contributions to the PC
+                             gradient.cols = c("#FCA636FF", "#B12A90FF", "#0D0887FF" ),
+                             repel = TRUE     # Avoid text overlapping
+)
+pca_loadings
+ggsave(here("figs", "indicators_pca_loadings.png"), width=8, height=6, units="in")
+
+# plot pca with autoplot() function from ggfortify, colored by soil series
+# note - I had originally tried to do this as a biplot but I think that adding the loadings on top of the points really makes things too confusing
+pca_soil <- autoplot(imp_pca, data=surf, colour="soil") +
+  scale_color_viridis(discrete=TRUE, name="Soil Series", option="magma") +
+  xlim(c(-.25, .15)) +
+  geom_hline(yintercept=0, linetype="dashed") +
+  geom_vline(xintercept=0, linetype="dashed") +
+  theme_katy()
+pca_soil
+ggsave(here("figs", "indicators_pca_soil.png"), width=8, height=6, units="in")
+
+# plot pca colored by management
+pca_mgmt <- autoplot(imp_pca, data=surf, colour="label") +
+  scale_color_viridis(discrete=TRUE, name="Management") +
+  xlim(c(-.25, .15)) +
+  geom_hline(yintercept=0, linetype="dashed") +
+  geom_vline(xintercept=0, linetype="dashed") +
+  theme_katy()
+pca_mgmt
+ggsave(here("figs", "indicators_pca_mgmt.png"), width=8, height=6, units="in")
+
+# Put two together in a grid
+plot_grid(pca_soil, pca_mgmt, ncol=1)
+ggsave(here("figs", "indicator_pca_grid.png"), width=7, height=10, units="in", dpi=400)
+
+# try a PCA grouped by climate
+pca_clim <- autoplot(imp_pca, data=surf, colour="climate") +
+  scale_color_viridis(discrete=TRUE, name="Climate") +
+  xlim(c(-.25, .15)) +
+  geom_hline(yintercept=0, linetype="dashed") +
+  geom_vline(xintercept=0, linetype="dashed") +
+  theme_katy()
+pca_clim
+ggsave(here("figs", "indicators_pca_clim.png"), width=8, height=6, units="in")
+
+# 4 - Redundancy analysis of indicators ?----
+
+
+# 4 ARCHIVE - Plot indicators that are the most sensitive to treatment (ANOVA) ----
 proj_anova <- surf_long %>%
   na.omit() %>%
   group_by(project, indicator) %>% 
@@ -167,68 +288,7 @@ ggplot(filter(indicator_sig_count, indicator!="p_h"), aes(x=fct_reorder(indicato
         legend.position = "none")
 ggsave(here("figs", "indicator_sig_count.png"), height=6, width=8, units="in")
 
-# 4 - PCA of indicators ----
-
-# Prcomp will not work with missing values - Can impute the missing values with missMDA package!!
-# also try with original data and prcomp, plot with ggfortify
-# prcomp is preferable to princomp because princomp uses a spectral decomposition approach (examines covariances between variables) and prcomp uses singular value decomposition, which examines covariances between individuals - supposed to have slightly better numerical accuracy
-nb <- estim_ncpPCA(indicators_only,method.cv = "Kfold", verbose = FALSE) # estimate the number of components from incomplete data
-nb$ncp
-res.comp <- imputePCA(indicators_only, ncp = nb$ncp)
-imp_ind <- res.comp$completeObs
-imp_pca <- prcomp(imp_ind, scale.=TRUE)
-summary(imp_pca)
-
-# plot screeplot with fviz_eig() from factoextra 
-fviz_eig(imp_pca)
-
-# Plot loadings using factoextra
-show_col(viridis_pal(option="plasma")(6)) # show hex codes for viridis color palette option plasma so I can pull them into a PCA plot
-
-pca_loadings <- fviz_pca_var(imp_pca,
-                             col.var = "contrib", # Color by contributions to the PC
-                             gradient.cols = c("#FCA636FF", "#B12A90FF", "#0D0887FF" ),
-                             repel = TRUE     # Avoid text overlapping
-)
-pca_loadings
-ggsave(here("figs", "indicators_pca_loadings.png"), width=8, height=6, units="in")
-
-# plot pca with autoplot() function from ggfortify, colored by soil series
-# note - I had originally tried to do this as a biplot but I think that adding the loadings on top of the points really makes things too confusing
-pca_soil <- autoplot(imp_pca, data=surf, colour="soil") +
-  scale_color_viridis(discrete=TRUE, name="Soil Series") +
-  xlim(c(-.25, .15)) +
-  geom_hline(yintercept=0, linetype="dashed") +
-  geom_vline(xintercept=0, linetype="dashed") +
-  theme_katy()
-pca_soil
-ggsave(here("figs", "indicators_pca_soil.png"), width=8, height=6, units="in")
-
-# plot pca colored by management
-pca_mgmt <- autoplot(imp_pca, data=surf, colour="label") +
-  scale_color_viridis(discrete=TRUE, name="Management") +
-  xlim(c(-.25, .15)) +
-  geom_hline(yintercept=0, linetype="dashed") +
-  geom_vline(xintercept=0, linetype="dashed") +
-  theme_katy()
-pca_mgmt
-ggsave(here("figs", "indicators_pca_mgmt.png"), width=8, height=6, units="in")
-
-# Put two together in a grid
-plot_grid(pca_soil, pca_mgmt)
-ggsave(here("figs", "indicator_pca_grid.png"), width=16, height=6, units="in")
-
-# try a PCA grouped by climate
-pca_clim <- autoplot(imp_pca, data=surf, colour="climate") +
-  scale_color_viridis(discrete=TRUE, name="Climate") +
-  xlim(c(-.25, .15)) +
-  geom_hline(yintercept=0, linetype="dashed") +
-  geom_vline(xintercept=0, linetype="dashed") +
-  theme_katy()
-pca_clim
-ggsave(here("figs", "indicators_pca_clim.png"), width=8, height=6, units="in")
-
-# 5 - Grouped analysis of indicator sensitivity in surface soils across all projects ----
+# 5 ARCHIVE - Grouped analysis of indicator sensitivity in surface soils across all projects using ANOVA and climate groupings ----
 # Attach climate data to horizon data
 # ANOVA to test significance of relationship between management and indicators within each project (nested within climate)
 ind_sig_clim <- surf_long %>%

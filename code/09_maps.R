@@ -92,7 +92,7 @@ project_labs <- project_annotate %>%
 # Make map
 ggplot(data=usa_ne) +
   geom_sf(fill=NA) +
-  coord_sf(xlim=c(-125.0, -66.93457), ylim=c(24.396308, 49.384358)) + # set bounding box around CONUS
+  coord_sf(xlim=c(-125.0, -66.93457), ylim=c(23.5, 49.384358)) + # set bounding box around CONUS
   annotation_north_arrow(location="bl", which_north="true", height=unit(.25, "in"), width=unit(.25, "in"),
                          pad_x = unit(0.4, "in"), pad_y = unit(0.25, "in"), style=north_arrow_fancy_orienteering) + # add north arrow
   annotation_scale(location = "bl") +
@@ -103,7 +103,21 @@ ggplot(data=usa_ne) +
   theme_classic() +
   easy_remove_axes() +
   theme(legend.position="none")
-ggsave(here("figs", "project_map.png"), height=6.5, width=8, units="in")
+ggsave(here("figs", "project_map.png"), height=5, width=8, units="in", dpi=400)
+
+# make version of the map with no annotation - so I can manually annotate with project information in Powerpoint
+ggplot(data=usa_ne) +
+  geom_sf(fill=NA) +
+  coord_sf(xlim=c(-125.0, -66.93457), ylim=c(23.5, 49.384358)) + # set bounding box around CONUS
+  annotation_north_arrow(location="bl", which_north="true", height=unit(.25, "in"), width=unit(.25, "in"),
+                         pad_x = unit(0.4, "in"), pad_y = unit(0.25, "in"), style=north_arrow_fancy_orienteering) + # add north arrow
+  annotation_scale(location = "bl") +
+  geom_point(data=project_labs, aes(x=avg_long, y=avg_lat, color=project)) +
+  scale_color_viridis(discrete=TRUE) +
+  theme_classic() +
+  easy_remove_axes() +
+  theme(legend.position="none")
+ggsave(here("figs", "project_map_no_labs.png"), height=5, width=8, units="in", dpi=600)
 
 # 2 - Table of project information ----
 project_table <- project_annotate %>%

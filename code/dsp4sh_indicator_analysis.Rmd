@@ -1,0 +1,903 @@
+---
+title: "DSP4SH v6 - Indicator Analysis"
+author: "Katy Dynarski"
+date: "2024-4-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Load libraries
+library(here)
+library(aqp)
+library(zoo)
+library(flextable)
+library(multcomp)
+library(corrr)
+library(ggcorrplot)
+library(FactoMineR)
+library(factoextra)
+library(corrplot)
+library(lme4)
+library(ggeffects)
+library(partykit)
+library(vip)
+library(ggrepel)
+library(ggeasy)
+library(viridis)
+library(cowplot)
+library(missMDA)
+library(ggfortify)
+library(scales)
+library(metafor)
+library(ggpubr)
+library(glmulti)
+library(sensemakr)
+library(tidyverse)
+
+# Load data
+project <- read.csv(here("data_processed", "05_project_data.csv"))
+surf <- read.csv(here("data_processed","05_surface_horizons.csv"))
+meta_df <- read.csv(here("data_processed", "05_meta_df.csv"))
+
+# Make list os summary functionss - useful for generating summary tables
+mean_sd <- list(
+  mean = ~round(mean(.x, na.rm = TRUE), 2), 
+  sd = ~round(sd(.x, na.rm = TRUE), 2)
+)
+
+min_max <- list(
+  min = ~min(.x, na.rm=TRUE), 
+  max = ~max(.x, na.rm=TRUE)
+)
+
+# Custom ggplot themes
+theme_katy <- function(base_size=14) {
+  theme_minimal(base_size=base_size) %+replace%
+    theme(# Legend
+      legend.title=element_text(size=rel(1)), legend.text=element_text(size=rel(.8)),
+      #axes                      
+      axis.text=element_text(size=rel(.8)),
+      axis.title=element_text(size=rel(1)))
+}
+
+theme_katy_grid <- function(base_size=14) {
+  theme_minimal(base_size=base_size) %+replace%
+    theme(# Legend
+      legend.title=element_text(size=rel(1)), legend.text=element_text(size=rel(.8)),
+      #axes                      
+      axis.text=element_text(size=rel(.8)),
+      axis.title=element_text(size=rel(1)),
+      # set margins (necessary for figure to not awkwardly overlap when using plot_grid in cowplot)
+      plot.margin=unit(c(0.5, 0.5, 0.5, 0.5), "cm"))
+}
+
+# Make vector of indicator labels so they will print nicely
+indicator_labs <- c("soc_pct" = "SOC %",
+                    "soc_stock_100cm" = "SOC stock (100 cm depth)",
+                    "soc_stock_0_30cm" = "SOC stock (30 cm depth)",
+                    "bglucosaminidase" = "B-glucosaminidase (NAG)",
+                    "ace" = "ACE",
+                    "bglucosidase" = "B-glucosidase (BG)",
+                    "kssl_wsa" = "Aggregate stability (KSSL)",
+                    "yoder_agg_stab_mwd" = "Aggregate stability (MWD)",
+                    "arylsulfatase" = "Arylsulfatase",
+                    "pox_c" = "POX-C",
+                    "tn_pct" = "Total N%",
+                    "bulk_density" = "Bulk density",
+                    "soil_respiration" = "Respiration",
+                    "phosphodiesterase" = "Phosphodiesterase",
+                    "alkaline_phosphatase" = "Alkaline phosphatase",
+                    "acid_phosphatase" = "Acid phosphatase",
+                    "p_h" = "pH")
+
+# Also make into dataframe (need this to use labels within map functions)
+indicator_labs_df <- data.frame(indicator_labs) %>%
+  rownames_to_column() %>%
+  rename(indicator = rowname,
+         label = indicator_labs)
+```
+
+# Project overview and environmental conditions
+
+Table of range in environmental conditions - this is not for a table but is referenced directly in the text.
+```{r range of environmental characteristics across all sites}
+site_range_table <- project %>%
+  summarize(across(where(is.numeric), min_max)) %>%
+  mutate(across(where(is.numeric), ~round(.x, 2))) %>%
+  transmute(lat_range= paste(pedon_y_min, pedon_y_max, sep="-"),
+         long_range = paste(pedon_x_min, pedon_x_max, sep="-"),
+         mat_range = paste(mat_min, mat_max, sep="-"),
+         map_range = paste(map_min, map_max, sep="-")) %>%
+  pivot_longer(everything())
+
+flextable(site_range_table)
+```
+
+# Analysis of soil health indicator variability across DSP4SH projects
+
+For most of the analyses here, I will be looking at indicator values in the 0-10 cm depth increment only (0-5 cm and 5-10 cm values were averaged to get 0-10 cm values).
+
+## Boxplots of indicator values across all projects
+
+Start by making boxplots of indicator values across treatments in all projects:
+
+```{r indicator boxplots}
+# Pivot indicator data longer
+surf_long <- surf %>%
+  select(dsp_pedon_id, soil, project, label, lu, climate, soc_pct, bulk_density, tn_pct:yoder_agg_stab_mwd, p_h:ace) %>%
+  pivot_longer(soc_pct:ace, names_to="indicator", values_to="value")
+
+# Make list of indicators for purrr
+indicators <- surf_long %>%
+  distinct(indicator) %>%
+  pull(indicator) %>%
+  as.character()
+
+# Generate plots showing boxplots of indicator values under different managements in each project. Each plot shows one indicator
+plot_list <- map(.x = indicators,
+                 .f = ~{
+                   surf_long %>% 
+                     filter(indicator == .x) %>%
+                     ggplot(aes(x = project, y = value, fill=label)) +
+                     geom_boxplot() +
+                     labs(x="Project", 
+                          y=glue::glue({filter(indicator_labs_df, indicator==.x)$label}), 
+                          title=glue::glue("0-10 cm Indicator Values - ", 
+                                           {filter(indicator_labs_df, indicator==.x)$label})) +
+                     scale_fill_viridis(discrete=TRUE, name="Management") +
+                     theme_katy() +
+                     theme(axis.text.x = element_text(angle = 45, hjust=1))
+                 })
+plot_list
+
+# Alternate version where each plot shows one project 
+projects <- surf_long %>%
+  distinct(project) %>%
+  pull(project) %>%
+  as.character()
+
+plot_list2 <- map(.x = projects,
+                 .f = ~{
+                   surf_long %>% 
+                     filter(project == .x) %>%
+                     ggplot(aes(x=label, y=value, fill=label)) +
+                     geom_boxplot() +
+                     facet_wrap(vars(indicator), scales="free_y", labeller=labeller(indicator=indicator_labs)) +
+                     scale_fill_viridis(discrete=TRUE, name="Management") +
+                     labs(x="Management", 
+                          title=glue::glue("0-10 cm Indicator Values - ", 
+                                           {filter(indicator_labs_df, indicator==.x)$label})) +
+                     theme_katy()
+                 })
+
+plot_list2
+```
+
+Initial takeaways from figures:
+- It's difficult to compare indicator values between projects because there is so much variability between projects in terms of response to management and absolute value of the data. 
+- Data tend to be all over the place - there's no obvious pattern of indicator values always being higher in a particular treatment. Overall, indicator values are most frequently higher in Ref management but even that is not consistent across indicators/between projects.
+- KSSL WSA appears to be one of the more sensitive to management indicators - most consistently higher in Ref systems
+- POX-C, SOC also tend to be higher in Ref systems
+- Values of soil respiration are really different between projects
+- Most indicator values tend to be higher under Ref management in Illinois, Kansas State, NC State, Minnesota projects
+- SHM seems to influence several indicators (ACE, POX-C, Yoder MWD, SOC%) in Texas A&M pt 1 project (and values in SHM are actually higher than in Ref)
+
+Make a version of these figures that shows two frequently measured indicators and how their response to management varies across a precipitation gradient.
+
+```{r indicator response to management across precipitation gradient}
+# Calculate site mean climate data
+site_clim_dist <- project %>%
+  distinct(project, climate)
+
+site_clim_sum <- project %>%
+  group_by(project) %>%
+  summarize(across(mat:map, ~ mean(.x, na.rm = TRUE))) %>%
+  left_join(site_clim_dist, by="project")
+
+# Join to soils data
+surf_avg_clim <- surf %>%
+  left_join(select(site_clim_sum, project, mat, map), by="project", suffix=c("_pedon", "_site"))
+
+# Plot - make one line plot that shows precipitation across sites, then plot on top of boxplots
+map_plot <- ggplot(surf_avg_clim, aes(x=fct_reorder(soil, map_site), y=map_site)) +
+  geom_point(color="dodgerblue4") +
+  geom_line(aes(group=1), color="dodgerblue2") +
+  labs(x="Soil", y="MAP (mm)") +
+  theme_katy_grid() +
+  easy_remove_x_axis() 
+  
+poxc_box <- ggplot(surf_avg_clim, aes(x=fct_reorder(soil, map_site), y=pox_c, fill=label)) +
+  geom_boxplot() +
+  labs(x="Soil", y="POX-C") +
+  scale_fill_viridis(discrete=TRUE, name="Management") +
+  theme_katy_grid() +
+  easy_remove_x_axis()
+
+bg_box <- ggplot(surf_avg_clim, aes(x=fct_reorder(soil, map_site), y=bglucosidase, fill=label)) +
+  geom_boxplot() +
+  labs(x="Soil", y=expression(beta*"-glucosidase")) +
+  scale_fill_viridis(discrete=TRUE, name="Management") +
+  theme_katy_grid() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+ind_grid <- plot_grid(map_plot,
+          poxc_box + theme(legend.position="none"), 
+          bg_box + theme(legend.position="none"), 
+          ncol=1, rel_heights=c(.5, 1, 1.25), align="v")
+
+ind_leg <- get_legend(bg_box + theme(legend.box.margin = margin(0, 0, 0, 12)))
+
+ind_full <- plot_grid(ind_grid, ind_leg, rel_widths = c(3, .4))
+ind_full
+```
+
+Also show a summary table of mean/sd indicator values:
+
+```{r summary table of indicator values}
+# table of mean indicator values in reference, SHM, and BAU systems
+indicator_summary_wide <- surf_long %>%
+  group_by(project, label, indicator) %>%
+  summarize(across(value, mean_sd)) %>%
+  na.omit() %>%
+  unite("summary", value_mean:value_sd) %>%
+  pivot_wider(names_from=indicator, values_from=summary)
+flextable(indicator_summary_wide)
+
+indicator_summary_ref <- indicator_summary_wide %>%
+  filter(label=="Ref")
+flextable(indicator_summary_ref)
+
+# table of mean indicator values by land use
+indicator_summary_lu <- surf_long %>%
+  group_by(lu, label, indicator) %>%
+  summarize(across(value, mean_sd)) %>%
+  na.omit() %>%
+  unite("summary", value_mean:value_sd) %>%
+  pivot_wider(names_from=indicator, values_from=summary)
+flextable(indicator_summary_lu)
+```
+
+## Use a correlation matrix to look at the structure and covariance of the soil health metrics
+
+In addition to indicator values (and if they are sensitive to treatment), I'm interested in seeing what indicators correlate well with one another and understanding the overall structure of the indicator data. Which indicators tend to "group" together and respond similarly to treatment? Which indicators are not sensitive, or may be contributing different information. 
+
+A few ways to try to get at these questions are correlation matrices and PCA biplots.
+
+Correlation matrix:
+
+``` {r correlation matrix of soil health indicators}
+indicators_only <- surf %>%
+  select(bulk_density, soc_pct, tn_pct:yoder_agg_stab_mwd, p_h:ace)
+indicators_normalized <- scale(indicators_only)
+
+# Plot correlation matrix - full version
+corr_matrix <- cor(indicators_normalized, use="pairwise.complete.obs")
+corr_pmat <- cor_pmat(indicators_normalized)
+ggcorrplot(corr_matrix, p.mat=corr_pmat, hc.order=TRUE, type="lower", lab=TRUE, insig="blank") +
+  scale_x_discrete(labels=indicator_labs) +
+  scale_y_discrete(labels=indicator_labs)
+
+# Plot a reduced version showing most significantly correlated variables
+indicators_red <- indicators_only %>%
+  select(soc_pct, tn_pct, kssl_wsa, ace, pox_c, acid_phosphatase, phosphodiesterase, bglucosidase, arylsulfatase) %>%
+  scale()
+
+corr_matrix2 <- cor(indicators_red, use="pairwise.complete.obs")
+corr_pmat2 <- cor_pmat(indicators_red)
+ggcorrplot(corr_matrix2, p.mat=corr_pmat2, type="lower", lab=TRUE, insig="blank") +
+  scale_x_discrete(labels=indicator_labs) +
+  scale_y_discrete(labels=indicator_labs)
+```
+
+Takeaways from correlation plot: 
+- Besides TN%, ACE is the strongest covariate of SOC (correlation coefficient of 0.9). 
+- KSSL water-stable aggregates and POX-C are also decent covariates (correlation coefficients of 0.5 and 0.46, respectively)
+- Arylsulfatase is the strongest enzyme covariate with SOC (0.39). Enzyme activities tend to be correlated with each other but not necessarily SOC%.
+
+## Principal Components Analysis  of indicator data
+
+There are a lot of missing values in the indicator data because not every metric was measured by every cooperator. PCA doesn't handle missing values, so I used the missMDA package to impute missing data. The package imputes missing values so that the imputed values have no weight on the results (i.e. just allows the analysis to be completed).
+
+Impute missing data and run PCA of soil health indicators:
+
+```{r impute missing data and run pca of soil health indicators}
+nb <- estim_ncpPCA(indicators_only,method.cv = "Kfold", verbose = FALSE) # estimate the number of components from incomplete data
+nb$ncp
+res.comp <- imputePCA(indicators_only, ncp = nb$ncp)
+imp_ind <- res.comp$completeObs
+imp_pca <- prcomp(imp_ind, scale.=TRUE)
+summary(imp_pca)
+```
+
+Plot PCA results:
+
+```{r plot pca results, echo=FALSE}
+# Plot loadings using factoextra - this is helpful to be able to see which variables contributed the most to the principal components
+pca_loadings <- fviz_pca_var(imp_pca,
+                             col.var = "contrib", # Color by contributions to the PC
+                             gradient.cols = c("#FCA636FF", "#B12A90FF", "#0D0887FF" ),
+                             repel = TRUE     # Avoid text overlapping
+)
+pca_loadings
+
+# plot pca with autoplot() function from ggfortify, colored by soil series
+pca_soil <- autoplot(imp_pca, data=surf, colour="soil") +
+  scale_color_viridis(discrete=TRUE, name="Soil Series", option="magma") +
+  xlim(c(-.25, .15)) +
+  geom_hline(yintercept=0, linetype="dashed") +
+  geom_vline(xintercept=0, linetype="dashed") +
+  theme_katy()
+pca_soil
+
+# plot pca colored by management
+pca_mgmt <- autoplot(imp_pca, data=surf, colour="label") +
+  scale_color_viridis(discrete=TRUE, name="Management") +
+  xlim(c(-.25, .15)) +
+  geom_hline(yintercept=0, linetype="dashed") +
+  geom_vline(xintercept=0, linetype="dashed") +
+  theme_katy()
+pca_mgmt
+
+# Put two together in a grid
+plot_grid(pca_soil, pca_mgmt)
+
+# try a PCA grouped by climate
+pca_clim <- autoplot(imp_pca, data=surf, colour="climate") +
+  scale_color_viridis(discrete=TRUE, name="Climate") +
+  xlim(c(-.25, .15)) +
+  geom_hline(yintercept=0, linetype="dashed") +
+  geom_vline(xintercept=0, linetype="dashed") +
+  theme_katy()
+pca_clim
+```
+
+The loadings plot shows that some of the variables that strongly influenced the principal components are bulk density, soil respiration, SOC%, phosphodiesterase, and ACE. A few variables grouped together pretty closely: SOC%, ACE, TN, and KSSL WSA stand out as very close, and most of the enzyme activities are bunched pretty closely together which makes sense. These results are fairly consistent with what we see in the correlation plots, which makes sense. The difference between a correlation plot and a PCA is that the correlation plot is showing correlations between variables, and the PCA is showing correlations between individuals.
+
+I would take this with a grain of salt because there are imputed variables - the loadings plot may be more reflective of which variables had the most real data. 
+
+The first PCA score plot (colored by soil series) shows that the data cluster fairly strongly by soil series. The second PCA score plot (colored by management) shows that the data do not cluster particularly strongly by management. Note - I had tried to show both these things at once by coloring data by soil series and using shape to denote different management, but I personally found it too busy to read on one figure.  
+
+This finding is really consistent with what we see by looking at just the SOC data - soils group much more strongly by soil series than by management groupings. This makes a lot of sense, of course. It is exciting to see that SOC% groups pretty closely with many other variables on the loading plot - many of the soil health metrics we're looking at are likely to reflect something about a soil sample's carbon content.
+
+I also tried a PCA score plot colored by climate. This shows that data cluster fairly strongly by climate. However, I am hesitant to read too much into this, as many climates are represented by only one project. This may really be showing that data cluster strongly by project, which is to be expected (and consistent with analyses so far).
+
+## Random forest to determine which indicators are most associated with SOC stocks and identify important covariates
+
+Random forest takes a long time to run, so start by plotting a conditional inference tree to get a sense of important variables associated with SOC stocks:
+
+```{r conditional inference tree of variable importance for SOC stocks}
+# prep data for random forest
+soc_df <- meta_df %>%
+  mutate(across(where(is.character), as.factor)) %>%
+  filter(!is.na(soc_stock_100cm)) # Filter out rows with no SOC stock data - they mess with the random forest model later on
+
+# First plot a conditional inference tree - with land use variables and top 5 soil health metrics (based on correlation with SOC)
+soc_tree <- ctree(soc_stock_100cm ~ soc_pct + ace + bglucosidase + yoder_agg_stab_mwd + kssl_wsa + bglucosaminidase +
+                    label + lu + till + soil + mat + map + clay_tot_psa, data=soc_df)
+plot(soc_tree)
+
+# try a version that doesn't include soil series - want to look at the underlying factors integrated by soil series
+soc_tree2 <- ctree(soc_stock_100cm ~ soc_pct + ace + bglucosidase + yoder_agg_stab_mwd + kssl_wsa + bglucosaminidase +
+                     label + lu + till + mat + map + clay_tot_psa, data=soc_df)
+plot(soc_tree2)
+
+# remove SOC from model
+soc_tree3 <- ctree(soc_stock_100cm ~ ace + bglucosidase + yoder_agg_stab_mwd + kssl_wsa + bglucosaminidase +
+                     label + lu + till + mat + map + clay_tot_psa, data=soc_df)
+plot(soc_tree3)
+```
+
+Soil series is the most important determinant of SOC stocks (100cm depth), followed by SOC% and land use. If soil series is removed, SOC% is the most important variable (somewhat obvious - SOC stocks are calculated from SOC%). If soil series and SOC% are removed, first split is MAT, followed by ACE/MAP, then land use and treatment
+
+Random forest and variable importance analyses:
+
+```{r random forest analysis of variable importance for SOC stocks}
+# Should include soil series in this analysis to see if this provides more data than MAT/MAP
+soc_forest <- cforest(soc_stock_100cm ~ ace + bglucosidase + yoder_agg_stab_mwd + kssl_wsa + bglucosaminidase +
+                        label + lu + till + mat + map + soil + clay_tot_psa, data=soc_df, ntree=30000)
+soc_vi <- vi(soc_forest)
+soc_vip <- vip(soc_vi, geom="col")
+soc_vip
+```
+
+The most important variables for predicting SOC stocks to 100 cm are: soil, MAT, ACE, MAP, land use, clay content, label, and tillage. I'm not sure if the indicators (bglucosaminidase, bglucosidase, KSSL WSA, and Yoder agg stab) being less important is due to missing data for some of those measurements in some projects.
+
+Overall, this tells us that between-project differences in SOC are much more evident than within-project differences. And, ACE is very closely related to overall SOC stocks!
+
+## Identify environmental covariates of indicators
+
+We can try to tease out some of the drivers of variability in indicator values across the dataset - this is helpful to understand if differences in indicator values are driven by soil, climate, land use, etc.
+
+``` {r glmulti to select best model predicting values of each indicator}
+# Pivot indicator data (with environmental covariates attached) to longer
+ind_long <- meta_df %>%
+  select(project, dsp_pedon_id, soil, label, climate, mat, map, lu, till, clay_tot_psa, soc_stock_0_30cm, soc_stock_100cm, 
+         soc_pct:yoder_agg_stab_mwd, soil_respiration:ace) %>%
+  pivot_longer(soc_pct:ace, names_to="indicator", values_to="value")
+
+# use glmulti to find best model for each indicator
+# then pull out the best model from the weight table, fit linear model, and extract fit metrics and coefficients
+multi <- ind_long %>%
+  group_by(indicator) %>%
+  nest() %>%
+  mutate(multi_obj = map(data, ~glmulti("value", c("mat", "map", "lu", "till", "clay_tot_psa"), data=.x,
+                                      level = 1, maxsize = 3, confsetsize = 128))) %>%
+  mutate(weight = map(multi_obj, ~(weightable(.x) %>% slice_head(n=1)))) %>%
+  transmute(indicator, data, weight) %>%
+  unnest(cols = c(weight)) %>%
+  mutate(lm_obj = map(data, ~lm(model, data=.x))) %>%
+  mutate(part_r2 = map(lm_obj, ~as.data.frame(sensemakr::partial_r2(.x)) 
+                       %>% rownames_to_column() %>% rename(var = "rowname", partial_r2 = "sensemakr::partial_r2(.x)"))) %>%
+  mutate(lm_tidy = map(lm_obj, broom::glance)) %>%
+  mutate(lm_coefs = map(lm_obj, broom::tidy)) 
+
+# Make top model for each indicator into a nice table
+multi_table <- multi %>%
+  ungroup() %>%
+  transmute(indicator, model, lm_tidy) %>%
+  unnest(cols = c(lm_tidy)) %>%
+  mutate(sig = ifelse(p.value<0.05, "significant", "not significant")) %>%
+  arrange(desc(adj.r.squared)) %>%
+  select(indicator, model, adj.r.squared, p.value, AIC, nobs, sig) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3))) 
+flextable(multi_table)
+
+# Pull out the partial R2 values for all models
+multi_partials <- multi %>%
+  ungroup() %>%
+  transmute(indicator, model, lm_tidy, part_r2) %>%
+  unnest(cols=c(lm_tidy, part_r2)) %>%
+  select(indicator, model, adj.r.squared, var, partial_r2) %>%
+  filter(var!="(Intercept)") %>%
+  arrange(desc(adj.r.squared)) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 2))) 
+flextable(multi_partials)
+```
+
+``` {r plot partial r2 for significant predictors of each indicator}
+# filter data to plot
+multi_partials_2plot <- multi_partials %>%
+  filter(partial_r2 > 0.1) %>%
+  mutate(var = factor(var, levels=c("luRANGE", "luGRASS", "luFOREST", "luFORAGE", "tillPerennial", "clay_tot_psa", "map", "mat")))
+
+# set colors for legend - using BrBG palette
+var_fill <- c("mat" = "#35978f",
+              "map" = "#80cdc1",
+              "clay_tot_psa" = "#c7eae5",
+              "tillPerennial" = "#f5f5f5",
+              "luFORAGE" = "#f6e8c3",
+              "luFOREST" = "#dfc27d",
+              "luGRASS" = "#bf812d",
+              "luRANGE" = "#8c510a")
+
+# plot
+ggplot(multi_partials_2plot, aes(fill=var, 
+                    y=partial_r2, x=fct_reorder(indicator, adj.r.squared))) + 
+  geom_bar(position="stack", stat="identity")+
+  geom_text(aes(label = partial_r2), size=3, position=position_stack(vjust = 0.5)) +
+  labs(x="Indicator", y=expression(Partial~R^2)) +
+  scale_x_discrete(labels=indicator_labs) +
+  scale_fill_manual(name="Predictor variable", 
+                    values=var_fill,
+                    labels=c("LU - Rangeland", "LU - Grass", "LU - Forest", "LU - Forage", "Tillage - Untilled Perennial",
+                             "Soil Clay %", "MAP", "MAT"),
+                    guide = guide_legend(reverse = TRUE),) +
+  theme_katy() +
+  coord_flip()
+```
+
+Takeaways:
+- SOC% is the most strongly predicted by environmental and land use covariates - adjusted R2 for the best model was 0.77, and the predictors were MAT, land use, and soil clay %
+  -- The strongest individual covariates were MAT (partial R2=0.41) and rangeland land use (partial R2=0.34)
+- B-glucosidase was most strongly influenced by MAP (partial R2=0.65)
+- KSSL aggregate stability was the indicator most strongly influenced by tillage (partial R2=0.43)
+- Acid phosphatase strongly influenced by rangeland land use
+- Indicators the least well-predicted by covariates (best models had adjusted R2<0.5): bulk density, alkaline phosphatase, respiration, Yoder aggregate stability, phosphodiesterase, bglucosaminidase (NAG)
+
+# Use meta-analysis methods to determine indicator sensitivity to management across all projects
+
+We're going to treat the DSP4SH database like a meta-analysis and use functions in the metafor() package to calculate the effect size of SHM and Ref treatments on soil health indicators.
+
+## Calculate effect size for individual treatments and plot indicator effect sizes
+
+Prep data for effect size calculation:
+
+```{r prepare data for effect size calculation}
+# first need to pivot data longer
+meta_long <- meta_df %>%
+  select(project, dsp_pedon_id, soil, label, climate, lu, till, trt, soc_stock_0_30cm, soc_stock_100cm, 
+         soc_pct:yoder_agg_stab_mwd, soil_respiration:ace) %>%
+  pivot_longer(soc_stock_0_30cm:ace, names_to="indicator", values_to="value")
+
+# Now, make a new "variable "treat""treatment" variable with two values, BAU and ASP. ASP will contain all of the SHM and Ref soils.
+meta_long2 <- meta_long %>%
+  mutate(treat = ifelse(label=="BAU", "BAU", "ASP"))
+
+# Calculate mean, sd, and n for BAU soils - need this for effect size calculation input
+bau_means <- meta_long2 %>%
+  filter(treat=="BAU") %>%
+  filter(dsp_pedon_id!="BAU9-1") %>% # exclude pedon BAU9-1 from analysis - it's from WashingtonState study and has implausibly high enzyme activity
+  group_by(project, indicator) %>%
+  nest() %>%
+  mutate(
+    mean_bau = map_dbl(data, ~mean(.$value, na.rm = TRUE)),
+    sd_bau = map_dbl(data, ~sd(.$value, na.rm = TRUE)),
+    n_bau = map_dbl(data, ~sum(!is.na(.$value)))) %>%
+  select(indicator, project, mean_bau, sd_bau, n_bau) %>%
+  ungroup() 
+
+# Calculate mean, sd, and n for Ref and SHM
+nested2 <- meta_long2 %>%
+  filter(treat=="ASP") %>%
+  group_by(indicator, label, project, lu, till, trt) %>%
+  nest() %>%
+  mutate(
+    mean_asp = map_dbl(data, ~mean(.$value, na.rm = TRUE)),
+    sd_asp = map_dbl(data, ~sd(.$value, na.rm = TRUE)),
+    n_asp = map_dbl(data, ~sum(!is.na(.$value)))) %>%
+  select(indicator, label, project, lu, till, trt, mean_asp, sd_asp, n_asp) %>%
+  ungroup()
+
+# Put data together. This will be input for escalc() function to calculate effect sizes
+es_in_big <- nested2 %>%
+  left_join(bau_means, by=c("indicator", "project")) %>%
+  na.omit()
+flextable(es_in_big) # also useful to be able to look at the mean values of all indicators in all treatments
+```
+
+The resulting absolutely monster table shows the effect size for every single indicator in every single treatment. Yikes.
+
+Calculate effect sizes:
+
+```{r calculate effect sizes}
+es_asp1 <- escalc(n1i = n_asp, n2i = n_bau, m1i = mean_asp, m2i = mean_bau, 
+                  sd1i = sd_asp, sd2i = sd_bau, data = es_in_big, measure = "ROM")
+
+# Join climate data to effect size data - this will be used as a moderator variable
+es_asp <- es_asp1 %>%
+  na.omit() %>% # omit any rows with NA - this should just be places where NaNs were calculated
+  unite("proj_trt", project, trt, remove = FALSE) %>%
+  rename(till_orig = till) %>%
+  mutate(till = ifelse(till_orig == "Till", "No-till", till_orig)) %>% # fix Texas A&M data that was mislabeled - no-till treatment was coded as Till
+  relocate(till, .before=till_orig) %>%
+  left_join(site_clim_sum, by="project") # add in climate data
+```
+
+Once effect sizes are calculated, they can be used to calculate a random effects model to determine significance of effect sizes.
+
+```{r calculate random effects models for all projects with no moderator variables}
+# nest data by indicators and treatment contrasts, calculate random-effects models, extract data from model
+es_asp_rma_nomod <- es_asp %>%
+  group_by(indicator, label) %>%
+  nest() %>%
+  mutate(rma_obj = map(data, ~rma(yi, vi, slab = proj_trt, data=.x, method="REML"))) %>%
+  mutate(rma_tidy = map(rma_obj, broom::tidy)) %>%
+  # make dataframe with effect sizes and variances for individual studies
+  mutate(study_df = map(rma_obj, ~data.frame(es = .x$yi,
+                                             se= sqrt(.x$vi),
+                                             type = "study",
+                                             study=.x$slab))) %>%
+  # make dataframe with overall random effects model estimate and standard error
+  mutate(summary_df = map(rma_obj, ~data.frame(es = .x$b,
+                                               se=.x$se,
+                                               type= "summary",
+                                               study="summary"))) %>%
+  # put two dfs together into one that can be used to make a forest plot
+  mutate(plot_df = map2(study_df, summary_df, rbind)) %>%
+  mutate(het_df = map(rma_obj, ~data.frame(i2 = .x$I2)))
+```
+
+Generate forest plots for each indicator, and a table of which indicators are significantly influenced by treatment:
+
+```{r forest plots and table of significant indicators}
+# pull out plotting data
+es_asp_rma_plot_df <- es_asp_rma_nomod %>%
+  select(indicator, label, plot_df, rma_tidy) %>%
+  ungroup() %>%
+  transmute(indicator, label, plot_df, rma_tidy) %>%
+  unnest(cols = c(plot_df, rma_tidy), names_sep = "_") %>%
+  select(indicator, label, plot_df_es, plot_df_se, plot_df_type, plot_df_study, rma_tidy_p.value) %>%
+  rename(es = plot_df_es,
+         se = plot_df_se,
+         type = plot_df_type,
+         study = plot_df_study,
+         summary_pval = rma_tidy_p.value)
+
+# make vectors of indicator/label combination
+indicator_label2 <- es_asp_rma_plot_df %>% distinct(indicator, label)
+indicators2 <- indicator_label2 %>% pull(indicator) %>% as.character
+labels2 <- indicator_label2 %>% pull(label) %>% as.character
+
+# make plots - should have the same overall effect sizes for each indicator, but more lines to show the different treatments
+plot_list3 <- map2(.x = indicators2,
+                  .y=labels2,
+                  .f = ~{
+                    es_asp_rma_plot_df %>% 
+                      filter(indicator == .x, label == .y) %>%
+                      ggplot(aes(x=factor(study, levels=rev(study)),y=es,
+                                 ymax=es+se,ymin=es-se,size=factor(type),colour=factor(type))) + 
+                      geom_pointrange() +
+                      coord_flip() + 
+                      geom_hline(yintercept=0, lty=2,linewidth=1) +
+                      scale_size_manual(values=c(0.5,1)) + 
+                      labs(x="Study", y="log response ratio",
+                           title=glue::glue({unique(filter(es_asp_rma_plot_df, indicator==.x & label==.y)$indicator)}, 
+                                            " - ", {unique(filter(es_asp_rma_plot_df, indicator==.x & label==.y)$label)})) + 
+                      scale_colour_manual(values=c("grey","black")) + 
+                      theme_katy() +
+                      theme(legend.position="none")
+                  })
+
+plot_list3
+
+# pull out significant indicators and make a table
+es_asp_rma_sig <- es_asp_rma_nomod %>%
+  ungroup() %>%
+  transmute(indicator, label, rma_tidy) %>%
+  unnest(cols = c(rma_tidy)) %>%
+  mutate(sig = ifelse(p.value<0.05, "significant", "not significant")) %>%
+  group_by(indicator) %>%
+  arrange(p.value) %>%
+  select(-term, -type, -std.error, -statistic) %>%
+  mutate(estimate = round(estimate, 3),
+         p.value = round(p.value, 3))
+flextable(es_asp_rma_sig)
+```
+
+Observations from forest plots: 
+- Most enzymes tend to be responsive except in Washington State study, though phosphodiesterase is all over the place. 
+- Washington State is consistently an outlier on enzyme activity response to management (responds negatively to SHM and Ref vs BAU, in most other studies enzyme activities are higher under SHM and Ref managements)
+- Bulk density is higher in Texas A&M Pt 1 reference site
+- Bulk density is a little higher on average in SHM systems vs BAU - this might be a no-till thing?
+- KSSL water stable aggregates responds positively to SHM and Ref in almost every study (only exception is SHM Kansas State - no change)
+- POX-C also almost always is significantly different under different management
+- SOC %in 0-5 cm higher under Ref in all studies, effect less pronounced in SHM (and in Kansas State, SHM SOC is slightly lower)
+- SOC stocks tend to be a little higher in Ref systems, not really influenced by SHM vs BAU
+- POX-C typically quite responsive in Ref systems, less so in SHM
+- Soil respiration is wild - no change in some studies, wide range of values in others that center around zero, and very responsive sometimes (University of Minnesota, Oregon State)
+- Aggregate stability (Yoder) is higher in Ref and SHM for most studies - interestingly not Texas A&M Pt 1
+
+```{r plot of summary effect sizes for all indicators}
+# make dataframe for plotting
+es_rma_summary <- es_asp_rma_plot_df %>%
+  filter(type=="summary") %>%
+  filter(indicator!="soc_stock_100cm") %>%
+  filter(indicator!="soc_stock_0_30cm") %>%
+  mutate(sig = ifelse(summary_pval<0.05, "significant", "not significant")) %>%
+  select(-study)
+
+# make plot
+ggplot(es_rma_summary, aes(x=fct_reorder(indicator, es), y=es, ymax=es+se, ymin=es-se, color=label)) + 
+  geom_pointrange() +
+  geom_text(aes(label=ifelse(sig=="significant", "*", "")), 
+            color="black", position=position_nudge(x=0.2), size=5) +
+  coord_flip() + 
+  geom_hline(yintercept=0, lty=2,linewidth=1) +
+  labs(x="Indicator", y="Log response ratio") +
+  scale_x_discrete(labels=indicator_labs) +
+  scale_color_viridis(discrete=TRUE, name="Management") +
+  theme_katy()
+```
+
+The indicators with the largest effect sizes are: arylsulfatase, aggregate stability (KSSL), aggregate stability (Yoder MWD), ACE, BG, SOC%, and POX-c.
+- Interestingly, the indicators with the biggest effect sizes in the Ref state (arylsulfatase and both aggregate stabilities) are much lower in the SHM state.
+- ACE, BG, SOC% and POX-C all have smaller effect sizes (still significant for both treatments) but magnitude of responses is similar between Ref and SHM conditions.
+
+## Calculate random-effects models with moderating variables
+
+Our previous random-effects models only determined if indicators were significantly influenced by treatment. However, those models didn't include any moderating variables and couldn't tell us what variables influenced the response of indicators to treatment. Some potential moderating variables of interest are MAT, MAP, land use, and tillage.
+
+```{r random effects model with moderating variables}
+# One version of the model - group by indicators only (so Ref and SHM are tested in the same model), and include MAT, MAP, land use, and tillage as moderators
+es_asp_rma <- es_asp %>%
+  group_by(indicator) %>%
+  nest() %>%
+  mutate(rma_obj = map(data, ~rma(yi, vi, slab = project, mod = ~ mat + map + lu + till, data=.x, method="REML"))) %>%
+  mutate(rma_tidy = map(rma_obj, broom::tidy)) %>%
+  # make dataframe with effect sizes and variances for individual studies
+  mutate(study_df = map(rma_obj, ~data.frame(es = .x$yi,
+                                             se= sqrt(.x$vi),
+                                             type = "study",
+                                             study=.x$slab))) %>%
+  # make dataframe with overall random effects model estimate and standard error
+  mutate(summary_df = map(rma_obj, ~data.frame(es = .x$b,
+                                               se=.x$se,
+                                               type= "summary",
+                                               study="summary"))) %>%
+  # put two dfs together into one that can be used to make a forest plot
+  mutate(plot_df = map2(study_df, summary_df, rbind)) %>%
+  mutate(het_df = map(rma_obj, ~data.frame(i2 = .x$I2,
+                                           r2 = .x$R2))) # pull out I2 and R2
+
+# Pull out dataframe with I2 and R2 values to see for which indicators does adding moderators to the model add significant explanatory power. Then we can pull these models out and look at them individually.
+es_asp_rma_het <- es_asp_rma %>%
+  select(indicator, het_df) %>%
+  ungroup() %>%
+  transmute(indicator,  het_df) %>%
+  unnest(cols = c(het_df)) %>%
+  arrange(desc(r2))
+flextable(es_asp_rma_het)
+# highest R2 is with KSSL WSA and phosphodiesterase
+```
+
+Indicators for which the addition of moderating variables explains between-study variability in response ratios are phosphodiesterase, KSSL WSA, arylsulfatase, alkaline phosphatase. Interesting that it is mostly enzymes - and also makes sense because enzymes are likely to be repsonsive to the environment.
+
+## Extract significant moderator variables for each indicator and plot
+
+Make table of significant moderating variables for each indicator:
+
+```{r table of significant moderating variables}
+# Make a table of significant moderator variables for each indicator
+es_asp_rma_sig <- es_asp_rma %>%
+  ungroup() %>%
+  transmute(indicator, rma_tidy) %>%
+  unnest(cols = c(rma_tidy)) %>%
+  mutate(sig = ifelse(p.value<0.05, "significant", "not significant")) %>%
+  filter(sig=="significant") %>%
+  filter(term!="intercept") %>%
+  select(!type) %>%
+  group_by(indicator) %>%
+  arrange(p.value, .by_group = TRUE) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3)))
+flextable(es_asp_rma_sig)
+```
+
+Takeaways:
+- For the indicators most strongly influenced by moderating variables, the top individual variables were:
+  -- Phosphodiesterase: land use, mAP (much weaker than land use)
+  -- KSSL WSA: did not actually have any individual significant moderating variables. To me that is a sign that the random-effects model is overfit. 
+  -- Arylsulfatase: MAT and MAP
+  -- Alkaline phosphatase: land use and tillage
+
+Make plots of significant moderator variables for each indicator.
+
+MAT:
+
+```{r plot significant moderator variables - mat}
+# MAT - Significant for ACE, acid phosphatase, arylsulfatase, bglucosaminidase, bglucosidase, SOC%
+# Make vector of indicators 
+mat_indicators <- c("ace", "acid_phosphatase", "arylsulfatase", "bglucosaminidase", "bglucosidase", "soc_pct")
+
+# Plot with map function
+mat_plots <- map(.x = mat_indicators,
+                 .f = ~{
+                   es_asp %>% 
+                     filter(indicator == .x) %>%
+                     ggplot(aes(x=mat, y=yi)) +
+                     geom_point(aes(colour=label)) +
+                     geom_smooth(method="lm", formula = y~x, color="black") +
+                     geom_hline(yintercept=0, linetype="dashed") +
+                     stat_cor(aes(label = paste(after_stat(rr.label), after_stat(p.label), sep = "~`,`~")),
+                              size=4) +
+                     scale_colour_viridis(discrete=TRUE, name="Management") +
+                     labs(x=expression("Mean annual temperature"~(degree*C)), y="Log response ratio",
+                          title=glue::glue({filter(indicator_labs_df, indicator==.x)$label})) + 
+                     theme_katy_grid()
+                 })
+
+# Now make into a panel grid with cowplot
+mat_ace <- pluck(mat_plots, 1)
+mat_acidp <- pluck(mat_plots, 2)
+mat_aryl <- pluck(mat_plots, 3)
+mat_bgm <- pluck(mat_plots, 4)
+mat_bg <- pluck(mat_plots, 5)
+mat_soc <- pluck(mat_plots, 6)
+
+mat_grid <- plot_grid(mat_ace + theme(legend.position="none", axis.title.x=element_blank()),
+                      mat_acidp + theme(legend.position="none", axis.title.y=element_blank()),
+                      mat_aryl + theme(legend.position="none", axis.title.y=element_blank(), axis.title.x=element_blank()),
+                      mat_bgm + theme(legend.position="none", axis.title.x=element_blank()),
+                      mat_bg + theme(legend.position="none", axis.title.y=element_blank()),
+                      mat_soc + theme(legend.position="none", axis.title.y=element_blank(), axis.title.x=element_blank()),
+                      align = 'vh',
+                      labels = c("A", "B", "C", "D", "E", "F"),
+                      hjust = -1,
+                      nrow = 2)
+
+mat_leg <- get_legend(mat_ace + theme(legend.box.margin = margin(0, 0, 0, 12)))
+
+plot_grid(mat_grid, mat_leg, rel_widths = c(3, .4))
+```
+
+Takeaways:
+- MAT is positively correlated with log response ratio for ACE protein, arylsulfatase, NAG, BG, and SOC.
+- Not sure why acid phosphatase shows up as significant, since the relationship actually is not significant on its own.
+
+MAP:
+
+```{r plot significant moderator variables - map}
+# MAP - significant for arysulfatase, phosphodiesterase, respiration, and yoder aggregate stability
+# Make vector of indicators 
+map_indicators <- c("arylsulfatase", "phosphodiesterase","soil_respiration", "yoder_agg_stab_mwd")
+
+# Plot with map function
+map_plots <- map(.x = map_indicators,
+                 .f = ~{
+                   es_asp %>% 
+                     filter(indicator == .x) %>%
+                     ggplot(aes(x=map, y=yi)) +
+                     geom_point(aes(colour=label)) +
+                     geom_smooth(method="lm", formula = y~x, color="black") +
+                     geom_hline(yintercept=0, linetype="dashed") +
+                     stat_cor(aes(label = paste(after_stat(rr.label), after_stat(p.label), sep = "~`,`~")),
+                              size=4) +
+                     scale_colour_viridis(discrete=TRUE, name="Management") +
+                     labs(x=expression("Mean annual precipitation"~(mm~yr^-1)), y="Log response ratio",
+                          title=glue::glue({filter(indicator_labs_df, indicator==.x)$label})) + 
+                     theme_katy_grid()
+                 })
+
+# Now make into a panel grid with cowplot
+map_aryl <- pluck(map_plots, 1)
+map_phos <- pluck(map_plots, 2)
+map_resp <- pluck(map_plots, 3)
+map_agg <- pluck(map_plots, 4)
+
+map_grid <- plot_grid(map_aryl + theme(legend.position="none", axis.title.x=element_blank()),
+                      map_phos + theme(legend.position="none", axis.title.x=element_blank(), axis.title.y=element_blank()),
+                      map_resp + theme(legend.position="none", axis.title.x=element_blank()),
+                      map_agg + theme(legend.position="none", axis.title.x=element_blank(), axis.title.y=element_blank()),
+                      align = 'vh',
+                      labels = c("A", "B", "C", "D"),
+                      hjust = -1,
+                      nrow = 2)
+
+map_grid_label <- ggdraw(map_grid) +
+  draw_label(expression("Mean annual precipitation"~(mm~yr^-1)), color="black", vjust=0, y=0)
+
+map_leg <- get_legend(map_aryl + theme(legend.box.margin = margin(0, 0, 0, 12)))
+
+plot_grid(map_grid_label, map_leg, rel_widths = c(3, .4))
+```
+Takeaways:
+- Correlation with MAP is generally really low and not actually significant
+
+Land use:
+
+```{r plot significant moderator variables - land use}
+# Land use - significant for alkaline phosphatase, bglucosaminidase, bulk density, phosphodiesterase, and soil respiration
+# Make vector of indicators
+lu_indicators <- c("alkaline_phosphatase", "bglucosaminidase", "bulk_density", "phosphodiesterase","soil_respiration")
+
+# Plot with map function
+lu_plots <- map(.x = lu_indicators,
+                .f = ~{
+                  es_asp %>% 
+                    filter(indicator == .x) %>%
+                    ggplot(aes(x=lu, y=yi, fill=label)) +
+                    geom_boxplot() +
+                    geom_hline(yintercept=0, linetype="dashed") +
+                    labs(x="Land use", y="Log response ratio",
+                         title=glue::glue({filter(indicator_labs_df, indicator==.x)$label})) + 
+                    scale_fill_viridis(discrete=TRUE, name="Management") +
+                    theme_katy_grid()
+                })
+
+# Now make into a panel grid with cowplot
+lu_alk <- pluck(lu_plots, 1)
+lu_bgm <- pluck(lu_plots, 2)
+lu_bd <- pluck(lu_plots, 3)
+lu_pd <- pluck(lu_plots, 4)
+lu_resp <- pluck(lu_plots, 5)
+
+lu_grid <- plot_grid(lu_alk + theme(legend.position="none", axis.title.x=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
+                     lu_bgm + theme(legend.position="none", axis.title.y=element_blank(), axis.text.x=element_text(angle=45, hjust=1)), 
+                     lu_bd + theme(legend.position="none", axis.title.y=element_blank(), 
+                                   axis.title.x=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
+                     lu_pd + theme(legend.position="none", axis.title.x=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
+                     lu_resp + theme(legend.position="none", axis.title.y=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
+                     align = 'vh',
+                     labels = c("A", "B", "C", "D", "E"),
+                     hjust = -1,
+                     nrow = 2)
+
+lu_leg <- get_legend(lu_alk + theme(legend.box.margin = margin(0, 0, 0, 12)))
+
+plot_grid(lu_grid, lu_leg, rel_widths = c(3, .4))
+```
+
+Takeaways:
+- Land use is a little more nuanced than SHM vs Ref. These data show that for several indicators (alkaline phosphatase, NAG, bulk density, phosphodiesterase, and respiration), the response is significantly different in different land uses within a label.
+For example, respiration is slightly higher in SHM vs BAU for crop systems, but slightly lower for forage systems. The response ratio of respiration is much higher in forest systems vs rangeland systems.

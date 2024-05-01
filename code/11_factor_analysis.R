@@ -135,3 +135,70 @@ summary(sem_fit3, fit.measures = TRUE, standardized = TRUE)
 # It might just be way too messy to be working with all of the data at once like this. Maybe need to split things up into different projects, check if factors represent the same things in different projects...that is probably more meaningful...
 
 # 3 - Exploratory Factor Analysis on One Project ----
+# Goal is to do a case study comparing Kansas State, NC State, and Oregon State
+# Start with EFA on Kansas State
+ks <- meta_df %>%
+  filter(project=="KansasState") %>%
+  select(soc_pct, kssl_wsa:yoder_agg_stab_mwd, soil_respiration:acid_phosphatase, pox_c)
+# excluding: pH, TN, phosphodiesterase (these have too many missing values across other data), and arylsulfatase because it has too many NAs here
+
+# Scale indicator data
+ks_scale <- scale(ks)
+
+# Make correlation matrix to feed into factor analysis
+ks_corr <- cor(ks_scale, use="pairwise.complete.obs")
+ks_pmat <- cor_pmat(ks_scale)
+ggcorrplot(ks_corr, p.mat=ks_pmat, hc.order=TRUE, type="lower", lab=TRUE, insig="blank")
+# all variables here are fairly well-correlated with each other - except for soil respiration which isn't correlated with anything else
+
+# Next step is to determine the number of factors to keep
+ks_ev <- eigen(ks_corr, symmetric=TRUE)
+ks_ap <- parallel(subject=24,var=9, rep=100,cent=.05) #subject is the number of observations, var is the number of variables
+# rep and cent you can keep the same no matter what
+ks_ns <- nScree(x=ks_ev$values, aparallel=ks_ap$eigen$qevpea)
+plotnScree(ks_ns)
+#  Most tests indicate that one factor is the optimal number
+
+# Now, conduct the factor analysis
+# with one factor at first
+ks_efa <- fa(ks_corr, 1, rotate="oblimin")
+ks_efa
+# Plot which variables load onto which latent factors
+fa.diagram(ks_efa$loadings)
+# everything but soil respiration loads onto one factor
+
+#try with two factors
+ks_efa2 <- fa(ks_corr, 2, rotate="oblimin")
+ks_efa2
+# get a warning message that estimated score weights are probably incorrect
+# Plot which variables load onto which latent factors
+fa.diagram(ks_efa2$loadings)
+
+# try NC State?
+nc <- meta_df %>%
+  filter(project=="NCState") %>%
+  select(soc_pct, kssl_wsa:yoder_agg_stab_mwd, soil_respiration:acid_phosphatase, arylsulfatase:pox_c) %>%
+  na.omit()
+
+# Scale indicator data
+nc_scale <- scale(nc)
+
+# Make correlation matrix to feed into factor analysis and examine correlation plot
+nc_corr <- cor(nc_scale, use="pairwise.complete.obs")
+nc_pmat <- cor_pmat(nc_scale)
+ggcorrplot(nc_corr, p.mat=nc_pmat, hc.order=TRUE, type="lower", lab=TRUE, insig="blank")
+
+# Next step is to determine the number of factors to keep
+nc_ev <- eigen(nc_corr, symmetric=TRUE)
+nc_ap <- parallel(subject=19,var=10, rep=100,cent=.05) #subject is the number of observations, var is the number of variables
+# rep and cent you can keep the same no matter what
+nc_ns <- nScree(x=nc_ev$values, aparallel=nc_ap$eigen$qevpea)
+plotnScree(nc_ns)
+#  Most tests indicate that 3 factors is the optimal number
+
+# Conduct factor analysis
+nc_efa <- fa(nc_corr, 3, rotate="oblimin")
+# womp womp get an Ultra-Heywood case and an error that estimated weights are likely incorrect
+nc_efa
+# Plot which variables load onto which latent factors
+fa.diagram(nc_efa$loadings)

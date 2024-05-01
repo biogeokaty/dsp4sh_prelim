@@ -7,9 +7,9 @@ library(tidyverse)
 
 coop_data <- read.csv(here("data_processed", "03_coop_data_filled.csv"))
 
-# 1 - Use aqp::dice() to calculate SOC stocks in each profile at 1-cm increments
+# 1 - Use aqp::dice() to calculate SOC stocks in each profile at 1-cm increments ----
 
-# Promote data to SoilProfileCollection object so you can use AQP functions ----
+# Promote data to SoilProfileCollection object so you can use AQP functions
 
 coop_spc <- coop_data # I like to assign my original dataframe a new namebefore promoting to a SoilProfileCollection so I don't lose the dataframe
 depths(coop_spc) <- dsp_pedon_id ~ hrzdep_t + hrzdep_b #make data a SoilProfileCollection, get depths from hrzdep_t and hrzdep_b columns
@@ -71,7 +71,7 @@ pedon_data <- coop_data %>%
 pedon_soc_stock <- pedon_data %>%
   left_join(soc_stocks, by="dsp_pedon_id") 
 
-# Write CSV
+# Save CSV
 write_csv(pedon_soc_stock, here("data_processed", "04_soc_stock_pedon.csv"))
 
 # 5 - Make dataframe with SOC stocks for originally-sampled horizons ----

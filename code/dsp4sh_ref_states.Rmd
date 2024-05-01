@@ -1,0 +1,609 @@
+---
+title: "DSP4SH - Figures and Tables for Ref States Paper"
+author: "Katy Dynarski"
+date: "2024-4-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Load libraries
+library(here)
+library(aqp)
+library(flextable)
+library(lme4)
+library(multcomp)
+library(ggeffects)
+library(ggrepel)
+library(ggspatial)
+library(ggeasy)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(viridis)
+library(cowplot)
+library(tidyverse)
+
+# Load data
+soc_pedon <- read.csv(here("data_processed", "04_soc_stock_pedon.csv"))
+soc_horizon <- read.csv(here("data_processed", "04_soc_stock_horizon.csv"))
+soc_pedon_filt <- read.csv(here("data_processed", "05_soc_pedon_filt.csv"))
+soc_horizon_filt <- read.csv(here("data_processed", "05_soc_horizon_filt.csv"))
+project <- read.csv(here("data_processed", "05_project_data.csv"))
+
+# Make list with mean and sd functions - useful for generating summary tables
+mean_sd <- list(
+  mean = ~round(mean(.x, na.rm = TRUE), 2), 
+  sd = ~round(sd(.x, na.rm = TRUE), 2)
+)
+
+theme_katy <- function(base_size=14) {
+  theme_classic(base_size=base_size) %+replace%
+    theme(# Legend
+      legend.title=element_text(size=rel(1)), legend.text=element_text(size=rel(.8)),
+      #axes                      
+      axis.text=element_text(size=rel(.8)),
+      axis.title=element_text(size=rel(1)))
+}
+
+theme_katy_grid <- function(base_size=14) {
+  theme_minimal(base_size=base_size) %+replace%
+    theme(# Legend
+      legend.title=element_text(size=rel(1)), legend.text=element_text(size=rel(.8)),
+      #axes                      
+      axis.text=element_text(size=rel(.8)),
+      axis.title=element_text(size=rel(1)),
+      # set margins (necessary for figure to not awkwardly overlap when using plot_grid in cowplot)
+      plot.margin=unit(c(0.5, 0.5, 0.5, 0.5), "cm"))
+}
+```
+
+# Map and overview of DSP4SH projects
+
+Map of DSP4SH Projects:
+
+```{r table of project data}
+# Make a table with information about project, soil series, and climate
+project_distinct <- project %>%
+  distinct(project, label, lu, till, trt)
+
+# Get unique soil series
+project_soil <- project %>%
+  distinct(project, soil) %>%
+  group_by(project) %>%
+  mutate(count = paste("soil",seq(n()), sep="_")) %>%
+  pivot_wider(names_from=count, values_from=soil) %>%
+  unite("soils", soil_1:soil_3, sep=", ", na.rm=TRUE)
+flextable(project_soil)
+
+# Average climate data
+site_clim_sum <- project %>%
+  group_by(project) %>%
+  summarize(across(mat:map, ~ mean(.x, na.rm = TRUE)))
+
+# Join together
+project_table <- project_distinct %>%
+  left_join(project_soil, by="project") %>%
+  left_join(site_clim_sum, by="project")
+flextable(project_table)
+```
+
+```{r map of DSP4SH sites}
+# Download map of USA from NaturalEarth as basemap
+usa_ne <- ne_states(country="united states of america")
+
+# Make dataframe for adding project data annotation to map
+# What I want - just one point for each project label combination, text label describing project
+# Write tibble of annotation for each project/label based on project_distinct
+annotation <- tibble(project=c(rep("Illinois", 3), 
+                               rep("KansasState", 3),
+                               rep("NCState", 3),
+                               rep("OregonState", 3),
+                               rep("TexasA&MPt-1", 3),
+                               rep("TexasA&MPt-2", 3),
+                               rep("UConn", 3),
+                               rep("UTRGV", 2),
+                               rep("UnivOfMinnesota", 3),
+                               rep("WashingtonState", 3)),
+                     label=c(rep(c("BAU", "Ref", "SHM"), 7), "BAU", "Ref", rep(c("BAU", "Ref", "SHM"), 2)),
+                     annotation=c("BAU: Conventional and organic corn-soybean rotation",
+                                  "Ref: Forest restored in 1990",
+                                  "SHM: No-till corn-soybean rotation",
+                                  "BAU: Diverse crops with conventional tillage",
+                                  "Ref: Native rangeland",
+                                  "SHM: No-till diverse crops and cover cropping",
+                                  "BAU: Wheat and corn with conventional tillage",
+                                  "Ref: Forest",
+                                  "SHM: Hayed perennial grass",
+                                  "BAU: Ryegrass and Christmas tree with tillage",
+                                  "Ref: Timber forest and hazelnut orchard",
+                                  "SHM: No-till grass and vineyard",
+                                  "BAU: Cropping with conventional tillage",
+                                  "Ref: Native rangeland",
+                                  "SHM: No-till rye and mixed crops",
+                                  "BAU: Wheat and sorghum with conventional tillage",
+                                  "Ref: Native perennial forage",
+                                  "SHM: No-till wheat and sorghum",
+                                  "BAU: Corn with conventional tillage",
+                                  "Ref: Forest",
+                                  "SHM: No-till corn and hay",
+                                  "BAU: Diverse crops with conventional tillage",
+                                  "Ref: Native forest",
+                                  "BAU: Soybean with conventional tillage",
+                                  "Ref: Native rangeland",
+                                  "SHM: No-till soybean",
+                                  "BAU: Cropping with conventional tillage",
+                                  "Ref: Perennial grassland",
+                                  "SHM: No-till cropping"))
+
+# Make annotation dataframe that includes project, label, soil, and xy coords
+project_annotate <- project %>% 
+  group_by(project, label) %>%
+  mutate(avg_lat = mean(pedon_y, na.rm=TRUE),
+         avg_long = mean(pedon_x, na.rm=TRUE)) %>%
+  distinct(project, label, avg_lat, avg_long) %>%
+  left_join(annotation, by=c("project", "label")) %>%
+  left_join(project_soil, by="project")
+
+# Make a dataframe with only one point per project to make the map labels
+project_labs <- project_annotate %>%
+  group_by(project) %>%
+  filter(label=="BAU") %>%
+  mutate(name_long = ifelse(project=="Illinois", "University of Illinois",
+                            ifelse(project=="OregonState", "Oregon State University",
+                                   ifelse(project=="UConn", "University of Connecticut",
+                                          ifelse(project=="UTRGV", "University of Texas - Rio Grande Valley",
+                                                 ifelse(project=="KansasState", "Kansas State University",
+                                                        ifelse(project=="NCState", "North Carolina State University",
+                                                               ifelse(project=="TexasA&MPt-1", "Texas A&M - 1",
+                                                                      ifelse(project=="TexasA&MPt-2", "Texas A&M - 2",
+                                                                             ifelse(project=="UnivOfMinnesota", "University of Minnesota", "Washington State University"))))))))))
+
+# Make map
+ggplot(data=usa_ne) +
+  geom_sf(fill=NA) +
+  coord_sf(xlim=c(-125.0, -66.93457), ylim=c(23.5, 49.384358)) + # set bounding box around CONUS
+  annotation_north_arrow(location="bl", which_north="true", height=unit(.25, "in"), width=unit(.25, "in"),
+                         pad_x = unit(0.4, "in"), pad_y = unit(0.25, "in"), style=north_arrow_fancy_orienteering) + # add north arrow
+  annotation_scale(location = "bl") +
+  geom_point(data=project_annotate, aes(x=avg_long, y=avg_lat, color=project)) +
+  geom_label_repel(data=project_labs, aes(x=avg_long, y=avg_lat, label=name_long),
+                   min.segment.length = 0, seed = 42, box.padding = 0.5) +
+  scale_color_viridis(discrete=TRUE) +
+  theme_classic() +
+  easy_remove_axes() +
+  theme(legend.position="none")
+```
+
+Generate overview table of project information:
+
+```{r dsp4sh project overview table}
+project_table <- project_annotate %>%
+  group_by(project) %>%
+  select(project, soils, annotation) %>%
+  separate_wider_delim(annotation, delim=": ", names=c("label", "description")) %>%
+  ungroup()
+flextable(project_table)
+```
+
+# Summary of SOC Stocks
+
+## Summary table of SOC stocks across projects, soils, and treatments
+
+Mean, standard deviation, and n for SOC stocks calculated to 30 cm and 100 cm for all soils in DSP4SH projects. 
+
+```{r soc summary}
+soc_summary <- soc_pedon %>%
+  group_by(project, soil, label) %>%
+  summarize(across(soc_stock_0_30cm:soc_stock_100cm, mean_sd), n=n())
+flextable(soc_summary)
+```
+
+## Boxplots of total SOC stocks under different management treatments
+
+The summary table shows that some some projects didn't have a consistent soil type across the different treatments, or just didn't have sufficient SOC data to calculate 30 cm or 100 cm depths. Data from these soils should be excluded from further analysis. These soils are: Canton (only in SHM), Hidalgo (has 30 cm stocks, not 100 cm), Pullman (only has SOC %), Kenyon (only in Ref), Marquis (only in SHM), Readlyn (only in BAU), and Woodbridge (maybe could leave? has n of 1 for BAU but does have Ref and SHM data).
+
+Plot boxplots of total SOC stocks under different management treatments. 
+
+```{r soc stock boxplots}
+# First, clean data so there are no NA values
+soc_100_clean <- soc_pedon_filt %>%
+  select(dsp_pedon_id, project, label, soil, soc_stock_100cm) %>%
+  na.omit() 
+
+# Boxplot comparing total SOC stocks (100 cm) between treatments within soil types
+ggplot(soc_100_clean, aes(x=soil, y=soc_stock_100cm, fill=label)) +
+  geom_boxplot() +
+  labs(x="Soil Series", y="SOC stock to 100 cm depth (Mg/ha)") +
+  scale_fill_viridis(discrete=TRUE, name="Management") +
+  theme_katy() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+# Boxplot comparing total SOC stocks (30 cm) between treatments within soil types
+soc_30_clean <- soc_pedon_filt %>%
+  select(dsp_pedon_id, project, label, soil, soc_stock_0_30cm) %>%
+  na.omit()
+
+ggplot(soc_30_clean, aes(x=soil, y=soc_stock_0_30cm, fill=label)) +
+  geom_boxplot() +
+  labs(x="Soil", y="SOC stock to 30 cm depth (Mg/ha)") +
+  scale_fill_viridis(discrete=TRUE, name="Management") +
+  theme_katy() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+```
+
+Visually, there a clear effect of soil type - soil profiles in each project tend to cluster around a similar SOC stock. It's a little easier to see effects of treatment in this plot - reference sites have wildly higher SOC stocks for some projects. Interestingly, we never really see higher SOC stocks under SHM treatment. 
+
+## Depth plots of SOC stocks and concentrations
+
+Boxplot of SOC stocks by depth increment:
+
+``` {r depth boxplots of SOC stocks}
+stock_depth_df <- soc_pedon_filt %>%
+  select(dsp_pedon_id, project, soil, label, soc_stock_0_30cm:soc_stock_50_100cm) %>%
+  pivot_longer(soc_stock_0_30cm:soc_stock_50_100cm, names_to="depth", values_to="soc_stock") %>%
+  mutate(depth = fct_recode(depth, "0-30 cm" = "soc_stock_0_30cm", "30-50 cm" = "soc_stock_30_50cm", 
+                            "50-100 cm" = "soc_stock_50_100cm"))
+
+stock_depth <- ggplot(stock_depth_df, aes(x=depth, y=soc_stock, fill=label)) +
+  geom_boxplot() +
+  coord_flip() +
+  scale_x_discrete(limits=rev) +
+  scale_fill_viridis(discrete=TRUE, name="Management") +
+  labs(title="SOC Stocks by Depth", x="Depth", y="SOC (Mg/ha)") +
+  theme_katy_grid()
+stock_depth
+```
+
+Ribbon plot of SOC stocks by depth (continuous):
+
+```{r ribbon plot of SOC stocks with depth}
+# Promote horizon data to SPC
+soc_spc <- soc_horizon_filt
+depths(soc_spc) <- dsp_pedon_id ~ hrzdep_t + hrzdep_b
+hzdesgnname(soc_spc) <- 'hzdesg'
+# promote project and label to site-level so they can be used as grouping variables
+site(soc_spc) <- ~ project + label + soil
+
+# Calculate stocks by depth increment for each soil and management condition
+slab_ref <- aqp::slab(subset(soc_spc, label=="Ref"),
+                      fm = soil ~ soc_stock_hrz,
+                      slab.structure = seq(0,100,by=10)) %>%
+  mutate(label="Ref")
+
+slab_shm <- aqp::slab(subset(soc_spc, label=="SHM"),
+                      fm = soil ~ soc_stock_hrz,
+                      slab.structure = seq(0,100,by=10)) %>%
+  mutate(label="SHM")
+slab_bau <- aqp::slab(subset(soc_spc, label=="BAU"),
+                      fm = soil ~ soc_stock_hrz,
+                      slab.structure = seq(0,100,by=10)) %>%
+  mutate(label="BAU")
+
+# Put management conditions together
+slab_mgmt <- bind_rows(slab_ref, slab_shm, slab_bau)
+
+# Plot with all mgmt together
+ggplot(slab_mgmt, aes(x=top, y=p.q50)) +
+  geom_line(linewidth=1.2, aes(color=label)) +
+  geom_ribbon(aes(ymin=p.q25, ymax=p.q75, x=top, fill=label), alpha=0.2) +
+  xlim(c(100,0)) +
+  coord_flip() +
+  labs(title="SOC Stocks by Depth", x="Depth (cm)", y="SOC (Mg/ha)") +
+  facet_wrap(~ soil, scales = "free_x") +
+  scale_fill_viridis(discrete=TRUE, guide="none") +
+  scale_color_viridis(discrete=TRUE, name="Management") +
+  theme_katy()
+```
+
+We can also plot SOC concentration by depth (instead of stocks).
+
+Boxplot of SOC concentration by depth:
+
+```{r boxplot of SOC concentration by depth}
+soc_conc_slab_ref <- aqp::slab(subset(soc_spc, label=="Ref"),
+                                fm = soil ~ soc_fill,
+                                slab.structure = c(0,5,10,30,60,100)) %>%
+  mutate(label="Ref")
+
+soc_conc_slab_shm <- aqp::slab(subset(soc_spc, label=="SHM"),
+                                fm = soil ~ soc_fill,
+                                slab.structure = c(0,5,10,30,60,100)) %>%
+  mutate(label="SHM")
+soc_conc_slab_bau <- aqp::slab(subset(soc_spc, label=="BAU"),
+                                fm = soil ~ soc_fill,
+                                slab.structure = c(0,5,10,30,60,100)) %>%
+  mutate(label="BAU")
+
+# Put management conditions together
+soc_conc_slab_all <- bind_rows(soc_conc_slab_ref, soc_conc_slab_shm, soc_conc_slab_bau) %>%
+  mutate(depth_increment = factor(ifelse(bottom=="5", "0-5 cm",
+                                         ifelse(bottom=="10", "5-10 cm",
+                                                ifelse(bottom=="30", "10-30 cm",
+                                                       ifelse(bottom=="60", "30-60 cm",
+                                                              "60-100 cm")))),
+                                  levels=c("0-5 cm", "5-10 cm", "10-30 cm", "30-60 cm", "60-100 cm"))) %>%
+      mutate(label = factor(label, levels=c("BAU", "SHM", "Ref")))
+
+
+conc_depth <- ggplot(soc_conc_slab_all, aes(x=depth_increment, y=p.q50, fill=label)) +
+  geom_boxplot() +
+  coord_flip() +
+  scale_x_discrete(limits=rev) +
+  scale_fill_viridis(discrete=TRUE, name="Management") +
+  labs(title="SOC Concentration by Depth", x="Depth", y="SOC Concentration (%)") +
+  theme_katy_grid()
+conc_depth
+```
+
+# Test effect of treatment on SOC stocks and concentrations with mixed linear model
+
+## Effect of treatment on SOC stocks to 100 cm depth
+
+Use the filtered data to run a mixed linear model of SOC stocks by soil and treatment:
+
+``` {r mixed linear model of SOC stocks to 100 cm by label and soil}
+# Random effects: soil
+# Fixed effects: label
+soc_stock100_mixed <- lmer(soc_stock_100cm ~ label + (1|soil), data = soc_100_clean)
+summary(soc_stock100_mixed)
+
+# Plot predictions of 100cm SOC stocks under each treatment
+pred_stock100 <- ggpredict(soc_stock100_mixed, terms = c("label"))
+ggplot(pred_stock100, aes(x=x, y=predicted)) +
+  geom_point() +
+  geom_errorbar(aes(x=x, ymin=conf.low, ymax=conf.high)) +
+  labs(x="Management", y="Predicted SOC stock to 100 cm (Mg/ha)") +
+  theme_katy()
+
+# Test significance of treatment by comparing full and reduced models, use likelihood ratio test
+stock100_mixed_full <- lmer(soc_stock_100cm ~ label + (1|soil), data = soc_100_clean, REML = FALSE)
+stock100_mixed_reduced <- lmer(soc_stock_100cm ~ (1|soil), data = soc_100_clean, REML = FALSE)
+anova(stock100_mixed_full, stock100_mixed_reduced, text="Chisq")
+```
+
+The results of the mixed model: Soil series explains most of the variability in SOC stocks. The full model with label as a fixed effect is not significantly different a reduced model with just soil as a random effect. Treatment is not a significant predictor of SOC stocks to 100 cm, only soil series is.
+
+## Effect of treatment on SOC stocks to 30 cm depth
+
+```{r mixed linear model of SOC stocks to 30 cm by label and soil}
+# Random effects: soil
+# Fixed effects: label
+soc_stock30_mixed <- lmer(soc_stock_0_30cm ~ label + (1|soil), data = soc_30_clean)
+summary(soc_stock30_mixed)
+
+# Plot predictions of 30cm SOC stocks under each treatment
+pred_stock30 <- ggpredict(soc_stock30_mixed, terms = c("label"))
+ggplot(pred_stock30, aes(x=x, y=predicted)) +
+  geom_point() +
+  geom_errorbar(aes(x=x, ymin=conf.low, ymax=conf.high)) +
+  labs(x="Management", y="Predicted SOC stock to 30 cm (Mg/ha)") +
+  theme_katy()
+
+# Test significance of treatment by comparing full and reduced models, use likelihood ratio test
+stock30_mixed_full <- lmer(soc_stock_0_30cm ~ label + (1|soil), data = soc_30_clean, REML = FALSE)
+stock30_mixed_reduced <- lmer(soc_stock_0_30cm ~ (1|soil), data = soc_30_clean, REML = FALSE)
+anova(stock30_mixed_full, stock30_mixed_reduced, text="Chisq")
+
+# Tukey HSD to test for significantly different groups
+stock30_mixed_tukey <- glht(soc_stock30_mixed, linfct = mcp(label = 'Tukey'))
+summary(stock30_mixed_tukey)
+```
+
+Results of the mixed model: Soil series explains most of the variability in SOC stocks. However, the full model is significantly different than the reduced model (with only soil series as a fixed effect). Treatment is a significant predictor of SOC stocks to 30 cm depth. Tukey HSD post-hoc test shows that SOC stocks to 30 cm in Ref group are significantly higher than SHM and BAU, SHM and BAU are not significantly different.
+
+## Effect of treatment on SOC concentrations with depth
+
+The boxplot generated earlier suggests that there may be significantly higher concentration of SOC in surface horizon (0-5cm) in reference plots. We can test with a mixed linear model using treatment as a fixed effect and soil series and depth as random effects.
+
+```{r mixed linear model for effect of treatment on SOC concentration with soil and depth as random effects}
+# Clean data for modeling - want only what's going into the model, and remove any NA values
+soc_conc_clean <- soc_horizon_filt %>%
+  select(dsp_pedon_id, label, soil, hrzdep_t, hrzdep_b, soc_pct) %>%
+  na.omit()
+
+# Random effects: soil, depth
+# Fixed effects: label
+
+soc_conc_mixed <- lmer(soc_pct ~ label + (1|soil) + (1|hrzdep_b), data = soc_conc_clean)
+summary(soc_conc_mixed)
+
+# Plot predictions of SOC concentration for each treatment
+pred_soc_conc <- ggpredict(soc_conc_mixed, terms = c("label"))
+plot(pred_soc_conc)
+
+# Compare full and reduced models, use likelihood ratio test
+soc_conc_mixed_full <- lmer(soc_pct ~ label + (1|soil) + (1|hrzdep_b), data = soc_conc_clean, REML = FALSE)
+soc_conc_mixed_reduced <- lmer(soc_pct ~ (1|soil) + (1|hrzdep_b), data = soc_conc_clean, REML = FALSE)
+anova(soc_conc_mixed_full, soc_conc_mixed_reduced, text="Chisq")
+
+# Tukey post-hoc
+soc_conc_mixed_tukey <- glht(soc_conc_mixed, linfct = mcp(label = 'Tukey'))
+summary(soc_conc_mixed_tukey)
+```
+
+Results of mixed model: depth and soil both explain a large chunk of variability. Reference appears significant after accounting for variability of soil type and depth. The full model with label as a fixed effect is significantly different from a reduced model with soil and horizon depth as random effects (no fixed effects). Tukey post-hoc shows that Ref is significantly different from both SHM and BAU. SHM and BAU are not significantly different from each other. 
+
+## Effect of treatment on SOC stocks with depth
+
+We can also run a similar model for thickness-normalized SOC stocks within each horizon.
+
+```{r mixed linear model for effect of treatment on SOC horizon thickness-normalized stocks with soil and depth as random effects}
+# Calculate stocks normalized to horizon thickness so each horizon can be comparable - there are different horizon depths in different pits/pedons which may mess up results. This is really capturing soc % x bulk density.
+
+# Clean data for modeling - want only what's going into the model, and remove any NA values
+soc_stock_clean <- soc_horizon_filt %>%
+  select(dsp_pedon_id, label, soil, hrzdep_t, hrzdep_b, soc_stock_hrz, hrzdepth) %>%
+  na.omit() %>%
+  mutate(depth_stock = soc_stock_hrz/hrzdepth) # calculate horizon thickness-normalized SOC stocks
+
+# Random effects: soil, pedon
+# Fixed effects: label, depth
+soc_stock_mixed <- lmer(depth_stock ~ label + (1|soil)  + (1|hrzdep_b), data = soc_stock_clean)
+summary(soc_stock_mixed)
+
+# Plot predictions of thickness-normalized SOC stocks with treatment
+pred_soc_stock <- ggpredict(soc_stock_mixed, terms = c("label"))
+plot(pred_soc_stock)
+
+# Compare full and reduced models, use likelihood ratio test
+soc_stock_mixed_full <- lmer(depth_stock ~ label + (1|soil) + (1|hrzdep_b), data = soc_stock_clean, REML = FALSE)
+soc_stock_mixed_reduced <- lmer(depth_stock ~ (1|soil) + (1|hrzdep_b), data = soc_stock_clean, REML = FALSE)
+anova(soc_stock_mixed_full, soc_stock_mixed_reduced, text="Chisq")
+
+# Tukey post-hoc
+soc_stock_mixed_tukey <- glht(soc_stock_mixed, linfct = mcp(label = 'Tukey'))
+summary(soc_stock_mixed_tukey)
+```
+
+Results of mixed model: depth and soil together explain about half of the variability not explained by label. Reference appears significant after accounting for variability of soil type and depth. The full model with label as a fixed effect is significantly different from a reduced model with soil and horizon depth as random effects (no fixed effects). Tukey post-hoc shows that Ref is significantly different from both SHM and BAU. SHM and BAU are not significantly different from each other. 
+
+What does this tell us? Although treatment is not a significant predictor of overall SOC stocks to 100 cm depth, when variability with depth and soil series is accounted for, treatment is a significant predictor of SOC concentration and thickness-normalized SOC stock (essentially SOC concentration and bulk density) within individual horizons. SOC stocks to 30 cm depth are also significantly influenced by treatment - which makes sense, as surface soil SOC is better captured by the 30 cm stocks rather than the 100 cm stocks. However, in all of these cases the only significantly different group is the Reference system - soil health management is not significantly different from BAU for either SOC concentration or stocks. 
+
+## Effect of treatment on bulk density with depth
+
+It's interesting that SOC concentration is so much more sensitive to management in the surface horizon than SOC stocks. That suggests that bulk density is probably also sensitive to management and may be moderating the effect of SOC concentration on overall stocks. Test this by plotting and with a mixed linear mode.
+
+Boxplot of bulk density by treatment and depth:
+
+```{r boxplot of bulk density treatment and depth}
+# Calculate depth increments for each soil series in different management conditions
+bd_slab_ref <- aqp::slab(subset(soc_spc, label=="Ref"),
+                         fm = soil ~ bd_fill,
+                         slab.structure = c(0,5,10,30,60,100)) %>%
+  mutate(label="Ref")
+
+bd_slab_shm <- aqp::slab(subset(soc_spc, label=="SHM"),
+                         fm = soil ~ bd_fill,
+                         slab.structure = c(0,5,10,30,60,100)) %>%
+  mutate(label="SHM")
+bd_slab_bau <- aqp::slab(subset(soc_spc, label=="BAU"),
+                         fm = soil ~ bd_fill,
+                         slab.structure = c(0,5,10,30,60,100)) %>%
+  mutate(label="BAU")
+
+# Put management conditions together
+bd_slab_all <- bind_rows(bd_slab_ref, bd_slab_shm, bd_slab_bau) %>%
+  mutate(depth_increment = factor(ifelse(bottom=="5", "0-5 cm",
+                                         ifelse(bottom=="10", "5-10 cm",
+                                                ifelse(bottom=="30", "10-30 cm",
+                                                       ifelse(bottom=="60", "30-60 cm",
+                                                              "60-100 cm")))),
+                                  levels=c("0-5 cm", "5-10 cm", "10-30 cm", "30-60 cm", "60-100 cm"))) %>%
+  mutate(label = factor(label, levels=c("BAU", "SHM", "Ref")))
+
+# Plot bulk density with depth
+bd_depth <- ggplot(bd_slab_all, aes(x=depth_increment, y=p.q50, fill=label)) +
+  geom_boxplot() +
+  coord_flip() +
+  scale_x_discrete(limits=rev) +
+  scale_fill_viridis(discrete=TRUE, name="Management") +
+  labs(title="Bulk Density by Depth", x="Depth", y="Bulk Density (g/cm3)") +
+  theme_katy_grid()
+bd_depth
+```
+
+Mixed linear model for effect of treatment on bulk density with soil and depth:
+
+```{r mixed linear model for effect of treatment on bulk density with soil and depth}
+# Clean data for modeling
+bd_clean <- soc_horizon_filt %>%
+  select(dsp_pedon_id, label, soil, hrzdep_t, hrzdep_b, bd_fill) %>%
+  na.omit() 
+
+# Random effects: soil
+# Fixed effects: label, depth
+
+bd_mixed <- lmer(bd_fill ~ label + (1|soil) + (1|hrzdep_b), data = bd_clean)
+summary(bd_mixed)
+
+# Plot predictions of SOC concentration for each treatment
+pred_bd <- ggpredict(bd_mixed, terms = c("label"))
+plot(pred_bd)
+
+# Test by comparing full and reduced models, use likelihood ratio test
+bd_mixed_full <- lmer(bd_fill ~ label + (1|soil) + (1|hrzdep_b), data = bd_clean, REML = FALSE)
+bd_mixed_reduced <- lmer(bd_fill ~ (1|soil) + (1|hrzdep_b), data = bd_clean, REML = FALSE)
+anova(bd_mixed_full, bd_mixed_reduced, text="Chisq")
+# Models are significantly different
+
+# Are there significantly different groups?
+bd_mixed_tukey <- glht(bd_mixed, linfct = mcp(label = 'Tukey'))
+summary(bd_mixed_tukey)
+```
+
+Results of mixed linear model: bulk density is indeed sensitive to management. It is significantly lower in the Ref management group vs the SHM and BAU groups, especially in the surface (0-5cm) horizon.
+
+## Gridded depth plot of SOC stock, concentration, and bulk density
+
+```{r gridded depth plot of SOC stock, concentration, and bulk density}
+stock_depth2 <- stock_depth + theme(legend.position="none")
+conc_depth2 <- conc_depth + theme(legend.position="none", axis.title.y=element_blank(), axis.text.y=element_blank()) #remove y axis from conc plot so axes can be shared
+bd_depth2 <- bd_depth + theme(legend.position="none", axis.title.y=element_blank(), axis.text.y=element_blank())
+depth_plot_legend <- get_legend(stock_depth)
+
+depth_plot_grid <- plot_grid(stock_depth2, conc_depth2, bd_depth2, depth_plot_legend, labels="", 
+                             rel_widths=c(1.4,1,1, .5), nrow=1)
+depth_plot_grid
+```
+
+# Analyses of just the surface horizons - since these appear most sensitive to management
+
+It might be useful to also separate out the 0-5 and 5-10cm depth classes since these were the only ones that are consistent across all the experiments (and surface horizons appear significantly more sensitive to management).
+
+## Effect of treatment on SOC stocks in 0-5cm depth increment only
+
+```{r mixed linear model for effect of treatment on 0-5cm SOC stocks with soil as random effect}
+# Subset just 0-5 cm horizon
+soc_stock_clean_5 <- soc_stock_clean %>%
+  filter(hrzdep_b == 5)
+
+soc_stock5_mixed <- lmer(soc_stock_hrz ~ label + (1|soil), data = soc_stock_clean_5)
+summary(soc_stock5_mixed)
+
+# Plot predictions 
+pred_soc_stock5 <- ggpredict(soc_stock5_mixed, terms = c("label"))
+ggplot(pred_soc_stock5, aes(x=x, y=predicted)) +
+  geom_point() +
+  geom_errorbar(aes(x=x, ymin=conf.low, ymax=conf.high)) +
+  labs(x="Management", y="Predicted SOC stock in 0-5 cm horizon (Mg/ha)") +
+  theme_katy()
+
+# Test significance of reduced model
+soc_stock5_mixed_full <- lmer(soc_stock_hrz ~ label + (1|soil), data = soc_stock_clean_5, REML = FALSE)
+soc_stock5_mixed_reduced <- lmer(soc_stock_hrz ~ (1|soil), data = soc_stock_clean_5, REML = FALSE)
+anova(soc_stock5_mixed_full, soc_stock5_mixed_reduced, text="Chisq")
+
+# test for significantly different groups
+soc_stock5_mixed_tukey <- glht(soc_stock5_mixed, linfct = mcp(label = 'Tukey'))
+summary(soc_stock5_mixed_tukey)
+```
+
+Results of mixed model: soil explains a lot of the variance. The full model with label as a fixed effect and soil as a random effect is significantly different from the reduced model with just soil as a random effect. Tukey post-hoc test shows that all treatment groups are significantly different from each other. This is the first analysis where SHM has been significantly different from BAU.
+
+## Effect of treatment on SOC stocks in 5-10 cm depth increment only
+
+``` {r mixed linear model for effect of treatment on 5-10cm SOC stocks with soil as random effect}
+soc_stock_clean_10 <- soc_stock_clean %>%
+  filter(hrzdep_b == 10)
+
+soc_stock10_mixed <- lmer(soc_stock_hrz ~ label + (1|soil), data = soc_stock_clean_10)
+summary(soc_stock10_mixed)
+
+# Plot predictions 
+pred_soc_stock10 <- ggpredict(soc_stock10_mixed, terms = c("label"))
+plot(pred_soc_stock10)
+
+# Test significance of reduced model
+soc_stock10_mixed_full <- lmer(soc_stock_hrz ~ label + (1|soil), data = soc_stock_clean_10, REML = FALSE)
+soc_stock10_mixed_reduced <- lmer(soc_stock_hrz ~ (1|soil), data = soc_stock_clean_10, REML = FALSE)
+anova(soc_stock10_mixed_full, soc_stock10_mixed_reduced, text="Chisq")
+
+soc_stock10_mixed_tukey <- glht(soc_stock10_mixed, linfct = mcp(label = 'Tukey'))
+summary(soc_stock10_mixed_tukey)
+```
+
+Results of mixed model: soil explains a lot of the variance. The full model with label as a fixed effect and soil as a random effect is significantly different from the reduced model with just soil as a random effect. Tukey post-hoc test shows that only Ref is significantly different from the other treatments.
+
+So there is only a statistically significant influence of SHM on SOC stocks in the very top of the soil profile - 0-5 cm only. At all other depths, only Ref treatment has a significant influence on SOC stocks and concentrations.

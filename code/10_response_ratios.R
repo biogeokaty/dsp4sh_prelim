@@ -3,7 +3,7 @@
 
 # 0 - Import data ----
 meta_df <- read.csv(here("data_processed", "05_meta_df.csv"))
-site_clim <- read.csv(here("data_processed", "05_site_clim.csv"))
+project <- read.csv(here("data_processed", "05_project_data.csv"))
 
 mean_sd <- list(
   mean = ~round(mean(.x, na.rm = TRUE), 2), 
@@ -57,10 +57,10 @@ es_asp1 <- escalc(n1i = n_asp, n2i = n_bau, m1i = mean_asp, m2i = mean_bau,
                   sd1i = sd_asp, sd2i = sd_bau, data = es_in_big, measure = "ROM")
 
 # Calculate site mean climate data
-site_clim_dist <- site_clim %>%
+site_clim_dist <- project %>%
   distinct(project, climate)
 
-site_clim_sum <- site_clim %>%
+site_clim_sum <- project %>%
   group_by(project) %>%
   summarize(across(mat:map, ~ mean(.x, na.rm = TRUE))) %>%
   left_join(site_clim_dist, by="project")
@@ -102,10 +102,16 @@ es_asp_rma_nomod <- es_asp %>%
 
 # pull out plotting data
 es_asp_rma_plot_df <- es_asp_rma_nomod %>%
-  select(indicator, label, plot_df) %>%
+  select(indicator, label, plot_df, rma_tidy) %>%
   ungroup() %>%
-  transmute(indicator, label, plot_df) %>%
-  unnest(cols = c(plot_df))
+  transmute(indicator, label, plot_df, rma_tidy) %>%
+  unnest(cols = c(plot_df, rma_tidy), names_sep = "_") %>%
+  select(indicator, label, plot_df_es, plot_df_se, plot_df_type, plot_df_study, rma_tidy_p.value) %>%
+  rename(es = plot_df_es,
+         se = plot_df_se,
+         type = plot_df_type,
+         study = plot_df_study,
+         summary_pval = rma_tidy_p.value)
 
 # make vectors of indicator/label combination
 indicator_label2 <- es_asp_rma_plot_df %>% distinct(indicator, label)
@@ -149,6 +155,26 @@ flextable(es_asp_rma_sig)
 
 # save csv
 write_csv(es_asp_rma_sig, here("figs", "indicator_effect_sizes.csv"))
+
+## 2.1 make plot of summary effect sizes for all indicators ----
+es_rma_summary <- es_asp_rma_plot_df %>%
+  filter(type=="summary") %>%
+  filter(indicator!="soc_stock_100cm") %>%
+  filter(indicator!="soc_stock_0_30cm") %>%
+  mutate(sig = ifelse(summary_pval<0.05, "significant", "not significant")) %>%
+  select(-study)
+
+ggplot(es_rma_summary, aes(x=fct_reorder(indicator, es), y=es, ymax=es+se, ymin=es-se, color=label)) + 
+  geom_pointrange() +
+  geom_text(aes(label=ifelse(sig=="significant", "*", "")), 
+            color="black", position=position_nudge(x=0.2), size=5) +
+  coord_flip() + 
+  geom_hline(yintercept=0, lty=2,linewidth=1) +
+  labs(x="Indicator", y="Log response ratio") +
+  scale_x_discrete(labels=indicator_labs) +
+  scale_color_viridis(discrete=TRUE, name="Management") +
+  theme_katy()
+ggsave(here("figs", "indicator_effect_sizes.png"), width=8, height=5.5, units="in", dpi=400)
 
 # 3 - Calculate random-effects models with moderating variables ----
 
@@ -198,12 +224,17 @@ es_asp_rma_sig <- es_asp_rma %>%
   filter(term!="intercept") %>%
   select(!type) %>%
   group_by(indicator) %>%
-  arrange(p.value, .by_group = TRUE)
-gt(es_asp_rma_sig)
+  arrange(p.value, .by_group = TRUE) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3)))
+flextable(es_asp_rma_sig)
 # The interesting thing is that some of the indicators where the random-effects model explained the most heterogeneity (e.g. KSSL WSA) do not actually have any significant moderating variables - that to me is a sign the model is overfit. Tillage is never a significant variable, so that really could be removed
+
+# Save CSV of significant moderator variables
+write_csv(es_asp_rma_sig, here("figs", "sig_moderating_vars.csv"))
 
 # Plot significant moderator variables
 # MAT - Significant for ACE, acid phosphatase, arylsulfatase, bglucosaminidase, bglucosidase, SOC%
+
 # Make vector of indicators 
 mat_indicators <- c("ace", "acid_phosphatase", "arylsulfatase", "bglucosaminidase", "bglucosidase", "soc_pct")
 
@@ -213,14 +244,14 @@ mat_plots <- map(.x = mat_indicators,
                    es_asp %>% 
                      filter(indicator == .x) %>%
                      ggplot(aes(x=mat, y=yi)) +
-                     geom_point(aes(colour=lu)) +
+                     geom_point(aes(colour=label)) +
                      geom_smooth(method="lm", formula = y~x, color="black") +
                      geom_hline(yintercept=0, linetype="dashed") +
                      stat_cor(aes(label = paste(after_stat(rr.label), after_stat(p.label), sep = "~`,`~")),
                               size=4) +
-                     scale_colour_discrete(name="Land use") +
+                     scale_colour_viridis(discrete=TRUE, name="Management") +
                      labs(x=expression("Mean annual temperature"~(degree*C)), y="Log response ratio",
-                          title=glue::glue({unique(filter(es_asp, indicator==.x)$indicator)})) + 
+                          title=glue::glue({filter(indicator_labs_df, indicator==.x)$label})) + 
                      theme_katy_grid()
                  })
 
@@ -246,7 +277,7 @@ mat_grid <- plot_grid(mat_ace + theme(legend.position="none", axis.title.x=eleme
 mat_leg <- get_legend(mat_ace + theme(legend.box.margin = margin(0, 0, 0, 12)))
 
 plot_grid(mat_grid, mat_leg, rel_widths = c(3, .4))
-ggsave(here("figs", "mat_mod_reg.png"), width=11, height=8, units="in")
+ggsave(here("figs", "mat_mod_reg.png"), width=12, height=8, units="in")
 
 # MAP - significant for arysulfatase, phosphodiesterase, respiration, and yoder aggregate stability
 # Make vector of indicators 
@@ -258,14 +289,14 @@ map_plots <- map(.x = map_indicators,
                    es_asp %>% 
                      filter(indicator == .x) %>%
                      ggplot(aes(x=map, y=yi)) +
-                     geom_point(aes(colour=lu)) +
+                     geom_point(aes(colour=label)) +
                      geom_smooth(method="lm", formula = y~x, color="black") +
                      geom_hline(yintercept=0, linetype="dashed") +
-                     stat_cor(aes(label = paste(after_stat(rr.label), ..p.label.., sep = "~`,`~")),
+                     stat_cor(aes(label = paste(after_stat(rr.label), after_stat(p.label), sep = "~`,`~")),
                               size=4) +
-                     scale_colour_discrete(name="Land use") +
+                     scale_colour_viridis(discrete=TRUE, name="Management") +
                      labs(x=expression("Mean annual precipitation"~(mm~yr^-1)), y="Log response ratio",
-                          title=glue::glue({unique(filter(es_asp, indicator==.x)$indicator)})) + 
+                          title=glue::glue({filter(indicator_labs_df, indicator==.x)$label})) + 
                      theme_katy_grid()
                  })
 
@@ -290,7 +321,7 @@ map_grid_label <- ggdraw(map_grid) +
 map_leg <- get_legend(map_aryl + theme(legend.box.margin = margin(0, 0, 0, 12)))
 
 plot_grid(map_grid_label, map_leg, rel_widths = c(3, .4))
-ggsave(here("figs", "map_mod_reg.png"), width=10, height=8, units="in")
+ggsave(here("figs", "map_mod_reg.png"), width=11, height=8, units="in")
 
 # Land use - significant for alkaline phosphatase, bglucosaminidase, bulk density, phosphodiesterase, and soil respiration
 # Make vector of indicators
@@ -301,11 +332,12 @@ lu_plots <- map(.x = lu_indicators,
                 .f = ~{
                   es_asp %>% 
                     filter(indicator == .x) %>%
-                    ggplot(aes(x=lu, y=yi, colour=lu)) +
+                    ggplot(aes(x=lu, y=yi, fill=label)) +
                     geom_boxplot() +
                     geom_hline(yintercept=0, linetype="dashed") +
                     labs(x="Land use", y="Log response ratio",
-                         title=glue::glue({unique(filter(es_asp, indicator==.x)$indicator)})) + 
+                         title=glue::glue({filter(indicator_labs_df, indicator==.x)$label})) + 
+                    scale_fill_viridis(discrete=TRUE, name="Management") +
                     theme_katy_grid()
                 })
 
@@ -326,8 +358,12 @@ lu_grid <- plot_grid(lu_alk + theme(legend.position="none", axis.title.x=element
                      labels = c("A", "B", "C", "D", "E"),
                      hjust = -1,
                      nrow = 2)
-lu_grid
-ggsave(here("figs", "lu_mod_box.png"), width=11, height=8, units="in")
+
+lu_leg <- get_legend(lu_alk + theme(legend.box.margin = margin(0, 0, 0, 12)))
+
+plot_grid(lu_grid, lu_leg, rel_widths = c(3, .4))
+
+ggsave(here("figs", "lu_mod_box.png"), width=12, height=8, units="in")
 
 # 5 - Alternate versions of random-effects models with moderating variables with less explanatory power ----
 # try another version of the model with MAT, MAP, and label instead of land use and tillage (more parsimonious to just compare cropping vs perennial)

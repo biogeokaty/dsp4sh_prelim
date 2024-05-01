@@ -9,7 +9,6 @@ library(janitor)
 library(aqp)
 library(zoo)
 library(flextable)
-library(gt)
 library(multcompView)
 library(multcomp)
 library(corrr)
@@ -21,8 +20,6 @@ library(lme4)
 library(ggeffects)
 library(partykit)
 library(vip)
-library(terra)
-library(geodata)
 library(leaps)
 library(sf)
 library(ggspatial)
@@ -37,13 +34,11 @@ library(ggfortify)
 library(scales)
 library(metafor)
 library(ggpubr)
-library(psych)
-library(GPArotation)
-library(nFactors)
-library(lavaan)
+library(glmulti)
+library(sensemakr)
 library(tidyverse)
 
-# 1 - ggplot theme function ####
+# 1 - ggplot theme function ----
 theme_katy <- function(base_size=14) {
   theme_minimal(base_size=base_size) %+replace%
     theme(# Legend
@@ -63,3 +58,30 @@ theme_katy_grid <- function(base_size=14) {
       # set margins (necessary for figure to not awkwardly overlap when using plot_grid in cowplot)
       plot.margin=unit(c(0.5, 0.5, 0.5, 0.5), "cm"))
 }
+
+# 2 - Make vector of indicator labels so they will print nicely ----
+indicator_labs <- c("soc_pct" = "SOC %",
+                    "soc_stock_100cm" = "SOC stock (100 cm depth)",
+                    "soc_stock_0_30cm" = "SOC stock (30 cm depth)",
+                    "bglucosaminidase" = "B-glucosaminidase (NAG)",
+                    "ace" = "ACE protein",
+                    "bglucosidase" = "B-glucosidase (BG)",
+                    "kssl_wsa" = "Aggregate stability (KSSL)",
+                    "yoder_agg_stab_mwd" = "Aggregate stability (Yoder MWD)",
+                    "arylsulfatase" = "Arylsulfatase",
+                    "pox_c" = "POX-C",
+                    "tn_pct" = "Total N%",
+                    "bulk_density" = "Bulk density",
+                    "soil_respiration" = "Respiration",
+                    "phosphodiesterase" = "Phosphodiesterase",
+                    "alkaline_phosphatase" = "Alkaline phosphatase",
+                    "acid_phosphatase" = "Acid phosphatase",
+                    "p_h" = "pH")
+
+# Also make into dataframe (need this to use labels within map functions)
+indicator_labs_df <- data.frame(indicator_labs) %>%
+  rownames_to_column() %>%
+  rename(indicator = rowname,
+         label = indicator_labs)
+
+# 3 - Run all the scripts :) ----

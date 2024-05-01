@@ -1,11 +1,14 @@
-# 05 - SOC Stock Summary Statistics
+# 05 - SOC Stock Summary Statistics and Plots
 # Katy Dynarski, March 2024
 
 # ALL THINGS SOC mostly mixed linear models...
 
 # 0 - Import data ----
+soc_pedon <- read.csv(here("data_processed", "04_soc_stock_pedon.csv"))
+soc_horizon <- read.csv(here("data_processed", "04_soc_stock_horizon.csv"))
 soc_pedon_filt <- read.csv(here("data_processed", "05_soc_pedon_filt.csv"))
 soc_horizon_filt <- read.csv(here("data_processed", "05_soc_horizon_filt.csv"))
+project <- read.csv(here("data_processed", "05_project_data.csv"))
 
 # 1 - Summary boxplots and LMER - effect of treatment and project on SOC stocks ####
 # First, clean data so there are no NA values
@@ -18,7 +21,8 @@ ggplot(soc_100_clean, aes(x=soil, y=soc_stock_100cm, fill=label)) +
   geom_boxplot() +
   labs(x="Soil Series", y="SOC stock to 100 cm depth (Mg/ha)") +
   scale_fill_viridis(discrete=TRUE, name="Management") +
-  theme_katy()
+  theme_katy() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
 ggsave(here("figs", "soc_stock_boxplot_soil_mgmt.png"), width=10, height=7, units="in", dpi=400)
 # can see a clear effect of soil type - soil profiles in each project tend to cluster around a similar SOC stock. It's a little easier to see effects of treatment in this plot - reference sites have wildly higher SOC stocks for some projects. Interestingly, we never really see higher SOC stocks under SHM treatment. 
 
@@ -53,7 +57,8 @@ ggplot(soc_30_clean, aes(x=soil, y=soc_stock_0_30cm, fill=label)) +
   geom_boxplot() +
   labs(x="Soil", y="SOC stock to 30 cm depth (Mg/ha)") +
   scale_fill_viridis(discrete=TRUE, name="Management") +
-  theme_katy()
+  theme_katy() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
 ggsave(here("figs", "soc_30cm_stock_boxplot_soil_mgmt.png"), width=10, height=7, units="in", dpi=400)
 
 # Also test with LME
@@ -76,7 +81,12 @@ ggsave(here("figs", "predicted_soc_30cm_stock_by_treatment.png"))
 stock30_mixed_full <- lmer(soc_stock_0_30cm ~ label + (1|soil), data = soc_30_clean, REML = FALSE)
 stock30_mixed_reduced <- lmer(soc_stock_0_30cm ~ (1|soil), data = soc_30_clean, REML = FALSE)
 anova(stock30_mixed_full, stock30_mixed_reduced, text="Chisq")
-# Models aresignificantly different, indicating treatment is a a significant predictor of SOC stocks to 30cm depth! 
+# Models are significantly different, indicating treatment is a a significant predictor of SOC stocks to 30cm depth! 
+
+# Are there significantly different groups?
+stock30_mixed_tukey <- glht(soc_stock30_mixed, linfct = mcp(label = 'Tukey'))
+summary(stock30_mixed_tukey)
+# Ref is significantly higher than SHM and BAU, SHM and BAU are not significantly different
 
 # 4 - Depth plot of SOC stocks and concentrations by treatment ----
 # Need to reshape data so that SOC stocks are long, not wide
@@ -137,6 +147,38 @@ conc_depth <- ggplot(soc_conc_slab_all, aes(x=depth_increment, y=p.q50, fill=lab
   theme_katy_grid()
 conc_depth
 ggsave(here("figs", "soc_conc_depth.png"))
+
+# Make a ribbon depth plot as well
+# Calculate stocks by depth increment for each soil and management condition
+slab_ref <- aqp::slab(subset(soc_spc, label=="Ref"),
+                      fm = soil ~ soc_stock_hrz,
+                      slab.structure = seq(0,100,by=10)) %>%
+  mutate(label="Ref")
+
+slab_shm <- aqp::slab(subset(soc_spc, label=="SHM"),
+                      fm = soil ~ soc_stock_hrz,
+                      slab.structure = seq(0,100,by=10)) %>%
+  mutate(label="SHM")
+slab_bau <- aqp::slab(subset(soc_spc, label=="BAU"),
+                      fm = soil ~ soc_stock_hrz,
+                      slab.structure = seq(0,100,by=10)) %>%
+  mutate(label="BAU")
+
+# Put management conditions together
+slab_mgmt <- bind_rows(slab_ref, slab_shm, slab_bau)
+
+# Plot with all mgmt together
+ggplot(slab_mgmt, aes(x=top, y=p.q50)) +
+  geom_line(linewidth=1.2, aes(color=label)) +
+  geom_ribbon(aes(ymin=p.q25, ymax=p.q75, x=top, fill=label), alpha=0.2) +
+  xlim(c(100,0)) +
+  coord_flip() +
+  labs(title="SOC Stocks by Depth", x="Depth (cm)", y="SOC (Mg/ha)") +
+  facet_wrap(~ soil, scales = "free_x") +
+  scale_fill_viridis(discrete=TRUE, guide="none") +
+  scale_color_viridis(discrete=TRUE, name="Management") +
+  theme_katy()
+ggsave(here("figs", "soc_stock_depth_ribbon.png"))
 
 # 5 - Linear mixed effects models for effect of treatment on SOC concentration while accounting for soil series and depth ----
 
