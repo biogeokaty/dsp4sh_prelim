@@ -203,19 +203,23 @@ ggsave(here("figs", "indicators_pca_loadings.png"), width=8, height=6, units="in
 
 # plot pca with autoplot() function from ggfortify, colored by soil series
 # note - I had originally tried to do this as a biplot but I think that adding the loadings on top of the points really makes things too confusing
-pca_soil <- autoplot(imp_pca, data=surf, colour="soil") +
+pca_soil <- autoplot(imp_pca, data=surf, colour="soil", size=3,
+                     loadings.label = TRUE, loadings.label.size = 4,
+                     loadings.label.colour = 'black', loadings.color="black", 
+                     loadings.label.repel=TRUE) +
   scale_color_viridis(discrete=TRUE, name="Soil Series", option="magma") +
-  xlim(c(-.25, .15)) +
   geom_hline(yintercept=0, linetype="dashed") +
   geom_vline(xintercept=0, linetype="dashed") +
   theme_katy()
 pca_soil
 ggsave(here("figs", "indicators_pca_soil.png"), width=8, height=6, units="in")
-
+    
 # plot pca colored by management
-pca_mgmt <- autoplot(imp_pca, data=surf, colour="label") +
+pca_mgmt <- autoplot(imp_pca, data=surf, colour="label", size=3,
+                     loadings.label = TRUE, loadings.label.size = 4,
+                     loadings.label.colour = 'black', loadings.color="black", 
+                     loadings.label.repel=TRUE) +
   scale_color_viridis(discrete=TRUE, name="Management") +
-  xlim(c(-.25, .15)) +
   geom_hline(yintercept=0, linetype="dashed") +
   geom_vline(xintercept=0, linetype="dashed") +
   theme_katy()
@@ -229,7 +233,6 @@ ggsave(here("figs", "indicator_pca_grid.png"), width=7, height=10, units="in", d
 # try a PCA grouped by climate
 pca_clim <- autoplot(imp_pca, data=surf, colour="climate") +
   scale_color_viridis(discrete=TRUE, name="Climate") +
-  xlim(c(-.25, .15)) +
   geom_hline(yintercept=0, linetype="dashed") +
   geom_vline(xintercept=0, linetype="dashed") +
   theme_katy()

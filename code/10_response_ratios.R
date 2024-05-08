@@ -12,13 +12,13 @@ mean_sd <- list(
 
 # 1 - Calculate effect size for individual treatments and plot indicator effect sizes ----
 
-# first need to pivot data longer
+# Pivot data longer
 meta_long <- meta_df %>%
   select(project, dsp_pedon_id, soil, label, climate, lu, till, trt, soc_stock_0_30cm, soc_stock_100cm, 
          soc_pct:yoder_agg_stab_mwd, soil_respiration:ace) %>%
   pivot_longer(soc_stock_0_30cm:ace, names_to="indicator", values_to="value")
 
-# Now, make a new "variable "treat""treatment" variable with two values, BAU and ASP. ASP will contain all of the SHM and Ref soils.
+# Make a new treatment variable with two values, BAU and ASP. ASP will contain all of the SHM and Ref soils.
 meta_long2 <- meta_long %>%
   mutate(treat = ifelse(label=="BAU", "BAU", "ASP"))
 
@@ -53,6 +53,8 @@ es_in_big <- nested2 %>%
   na.omit()
 write_csv(es_in_big, here("figs", "mean_indicator_values.csv"))
 
+
+# Calculate effect sizes
 es_asp1 <- escalc(n1i = n_asp, n2i = n_bau, m1i = mean_asp, m2i = mean_bau, 
                   sd1i = sd_asp, sd2i = sd_bau, data = es_in_big, measure = "ROM")
 
@@ -65,13 +67,25 @@ site_clim_sum <- project %>%
   summarize(across(mat:map, ~ mean(.x, na.rm = TRUE))) %>%
   left_join(site_clim_dist, by="project")
 
+# Calculate site mean clay%
+site_clay <- meta_df %>%
+  group_by(project, label) %>%
+  summarize(clay_mean = mean(clay_tot_psa, na.rm=TRUE))
+
+clay_min_max <- site_clay %>%
+  ungroup() %>%
+  na.omit() %>%
+  summarize(across(where(is.numeric), min_max)) %>%
+  mutate(across(where(is.numeric), ~round(.x, 2)))
+
 es_asp <- es_asp1 %>%
   na.omit() %>% # omit any rows with NA - this should just be places where NaNs were calculated
   unite("proj_trt", project, trt, remove = FALSE) %>%
   rename(till_orig = till) %>%
   mutate(till = ifelse(till_orig == "Till", "No-till", till_orig)) %>% # fix Texas A&M data that was mislabeled - no-till treatment was coded as Till
   relocate(till, .before=till_orig) %>%
-  left_join(site_clim_sum, by="project") # add in climate data
+  left_join(site_clim_sum, by="project") %>%
+  left_join(site_clay, by=c("project", "label"))
 
 # check by plotting
 ggplot(es_asp %>% filter(indicator=="soc_pct"), aes(x=till, y=yi, colour=label)) +
@@ -97,8 +111,7 @@ es_asp_rma_nomod <- es_asp %>%
                                                type= "summary",
                                                study="summary"))) %>%
   # put two dfs together into one that can be used to make a forest plot
-  mutate(plot_df = map2(study_df, summary_df, rbind)) %>%
-  mutate(het_df = map(rma_obj, ~data.frame(i2 = .x$I2)))
+  mutate(plot_df = map2(study_df, summary_df, rbind))
 
 # pull out plotting data
 es_asp_rma_plot_df <- es_asp_rma_nomod %>%
@@ -124,7 +137,8 @@ plot_list <- map2(.x = indicators2,
                   .f = ~{
                     es_asp_rma_plot_df %>% 
                       filter(indicator == .x, label == .y) %>%
-                      ggplot(aes(x=factor(study, levels=rev(study)),y=es,ymax=es+se,ymin=es-se,size=factor(type),colour=factor(type))) + 
+                      ggplot(aes(x=factor(study, levels=rev(study)),y=es,ymax=es+se,ymin=es-se,size=factor(type),
+                                 colour=factor(type))) + 
                       geom_pointrange() +
                       coord_flip() + 
                       geom_hline(yintercept=0, lty=2,linewidth=1) +
@@ -140,23 +154,7 @@ plot_list <- map2(.x = indicators2,
                            width=8, height=5.5, units="in", dpi=400)
                   })
 
-# pull out significant indicators and make a table
-es_asp_rma_sig <- es_asp_rma_nomod %>%
-  ungroup() %>%
-  transmute(indicator, label, rma_tidy) %>%
-  unnest(cols = c(rma_tidy)) %>%
-  mutate(sig = ifelse(p.value<0.05, "significant", "not significant")) %>%
-  group_by(indicator) %>%
-  arrange(p.value) %>%
-  select(-term, -type, -std.error, -statistic) %>%
-  mutate(estimate = round(estimate, 3),
-         p.value = round(p.value, 3))
-flextable(es_asp_rma_sig)
-
-# save csv
-write_csv(es_asp_rma_sig, here("figs", "indicator_effect_sizes.csv"))
-
-## 2.1 make plot of summary effect sizes for all indicators ----
+## 2.1 - make plot of summary effect sizes for all indicators ----
 es_rma_summary <- es_asp_rma_plot_df %>%
   filter(type=="summary") %>%
   filter(indicator!="soc_stock_100cm") %>%
@@ -165,9 +163,9 @@ es_rma_summary <- es_asp_rma_plot_df %>%
   select(-study)
 
 ggplot(es_rma_summary, aes(x=fct_reorder(indicator, es), y=es, ymax=es+se, ymin=es-se, color=label)) + 
-  geom_pointrange() +
+  geom_pointrange(size=1, linewidth=1) +
   geom_text(aes(label=ifelse(sig=="significant", "*", "")), 
-            color="black", position=position_nudge(x=0.2), size=5) +
+            color="black", position=position_nudge(x=0.25), size=5) +
   coord_flip() + 
   geom_hline(yintercept=0, lty=2,linewidth=1) +
   labs(x="Indicator", y="Log response ratio") +
@@ -176,13 +174,55 @@ ggplot(es_rma_summary, aes(x=fct_reorder(indicator, es), y=es, ymax=es+se, ymin=
   theme_katy()
 ggsave(here("figs", "indicator_effect_sizes.png"), width=8, height=5.5, units="in", dpi=400)
 
-# 3 - Calculate random-effects models with moderating variables ----
+# Make table with n for interpretability
+es_rma_n_df <- es_asp_rma_nomod %>%
+  select(indicator, label, plot_df) %>%
+  ungroup() %>%
+  transmute(indicator, label, plot_df) %>%
+  unnest(cols = c(plot_df)) %>%
+  count(indicator, label, type) %>%
+  filter(type=="study") %>%
+  select(-type)
+flextable(es_rma_n_df)
+write_csv(es_rma_n_df, here("figs", "es_rma_n.csv"))
 
-# One version of the model - group by indicators only (so Ref and SHM are tested in the same model), and include MAT, MAP, land use, and tillage as moderators
-es_asp_rma <- es_asp %>%
-  group_by(indicator) %>%
+## 2.2 - make table summarizing overall random-effects model ----
+# tau2, I2, H2, Q-test, model estimates
+
+rma_report_table <- es_asp_rma_nomod %>%
+  mutate(report_df = map(rma_obj, ~data.frame(tau2 = .x$tau2,
+                                              i2 = .x$I2,
+                                              h2 = .x$H2,
+                                              q_stat = .x$QE,
+                                              q_pval = .x$QEp))) %>%
+  select(indicator, label, rma_tidy, report_df) %>%
+  ungroup() %>%
+  transmute(indicator, label, rma_tidy, report_df) %>%
+  unnest(cols = c(rma_tidy, report_df)) %>%
+  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant")) %>%
+  select(-term, -type) %>%
+  mutate(estimate = round(estimate, 3),
+         std.error = round(std.error, 3),
+         statistic = round(statistic, 2),
+         p.value = round(p.value, 3),
+         tau2 = round(tau2, 3),
+         i2 = round(i2, 2),
+         h2 = round(h2, 2),
+         q_stat = round(q_stat, 1),
+         q_pval = round(q_pval, 3))
+flextable(rma_report_table)
+write_csv(rma_report_table, here("figs", "rma_report_table.csv"))
+
+## 2.3 - ARCHIVE - make plot of summary effect sizes for all indicators, grouped by land use ----
+# this would help with identifying which indicators are sensitive to management in a variety of contexts and determine the most useful indicators
+# I'm imagining a forest plot grouped by climate, faceted for each indicator
+# might also be good to have as a table for me to reference
+
+# Need to calculate another RMA with land use as a grouping factor
+lu_rma <- es_asp %>%
+  group_by(indicator, label, lu) %>%
   nest() %>%
-  mutate(rma_obj = map(data, ~rma(yi, vi, slab = project, mod = ~ mat + map + lu + till, data=.x, method="REML"))) %>%
+  mutate(rma_obj = map(data, ~rma(yi, vi, slab = proj_trt, data=.x, method="REML"))) %>%
   mutate(rma_tidy = map(rma_obj, broom::tidy)) %>%
   # make dataframe with effect sizes and variances for individual studies
   mutate(study_df = map(rma_obj, ~data.frame(es = .x$yi,
@@ -195,48 +235,290 @@ es_asp_rma <- es_asp %>%
                                                type= "summary",
                                                study="summary"))) %>%
   # put two dfs together into one that can be used to make a forest plot
-  mutate(plot_df = map2(study_df, summary_df, rbind)) %>%
-  mutate(het_df = map(rma_obj, ~data.frame(i2 = .x$I2,
-                                           r2 = .x$R2))) # pull out I2 and R2
+  mutate(plot_df = map2(study_df, summary_df, rbind))
 
-# Pull out dataframe with I2 and R2 values to see for which indicators does adding moderators to the model add significant explanatory power. Then we can pull these models out and look at them individually.
-es_asp_rma_het <- es_asp_rma %>%
-  select(indicator, het_df) %>%
+# table for reporting
+lu_rma_report_table <- lu_rma %>%
+  mutate(report_df = map(rma_obj, ~data.frame(tau2 = .x$tau2,
+                                              i2 = .x$I2,
+                                              h2 = .x$H2,
+                                              q_stat = .x$QE,
+                                              q_pval = .x$QEp))) %>%
+  select(indicator, label, lu, rma_tidy, report_df) %>%
   ungroup() %>%
-  transmute(indicator,  het_df) %>%
-  unnest(cols = c(het_df)) %>%
-  arrange(desc(r2))
-flextable(es_asp_rma_het)
-# highest R2 is with KSSL WSA and phosphodiesterase
+  transmute(indicator, label, lu, rma_tidy, report_df) %>%
+  unnest(cols = c(rma_tidy, report_df)) %>%
+  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant")) %>%
+  select(-term, -type) %>%
+  mutate(estimate = round(estimate, 3),
+         std.error = round(std.error, 3),
+         statistic = round(statistic, 2),
+         p.value = round(p.value, 3),
+         tau2 = round(tau2, 3),
+         i2 = round(i2, 2),
+         h2 = round(h2, 2),
+         q_stat = round(q_stat, 1),
+         q_pval = round(q_pval, 3))
+flextable(lu_rma_report_table)
+write_csv(lu_rma_report_table, here("figs", "lu_rma_report_table.csv"))
 
-# Pluck out KSSL WSA model to look at predictors
-summary(es_asp_rma %>% pluck("rma_obj", 5))
-# Interesting thing is that none of the individual moderators are actually significant. I wonder if this model just explains heterogeneity because it essentially makes each study a unique combination of categorical moderators ?
-
-# 4 - Extract significant moderator variables for each indicator and plot ---- 
-# Make a table of significant moderator variables for each indicator
-es_asp_rma_sig <- es_asp_rma %>%
+# pull out plotting data
+lu_rma_plot_df <- lu_rma %>%
+  select(indicator, label, lu, plot_df, rma_tidy) %>%
   ungroup() %>%
-  transmute(indicator, rma_tidy) %>%
-  unnest(cols = c(rma_tidy)) %>%
-  mutate(sig = ifelse(p.value<0.05, "significant", "not significant")) %>%
-  filter(sig=="significant") %>%
-  filter(term!="intercept") %>%
-  select(!type) %>%
+  transmute(indicator, label, lu, plot_df, rma_tidy) %>%
+  unnest(cols = c(plot_df, rma_tidy), names_sep = "_") %>%
+  select(indicator, label, lu, plot_df_es, plot_df_se, plot_df_type, plot_df_study, rma_tidy_p.value) %>%
+  rename(es = plot_df_es,
+         se = plot_df_se,
+         type = plot_df_type,
+         study = plot_df_study,
+         summary_pval = rma_tidy_p.value) %>%
+  filter(type=="summary") %>%
+  filter(indicator!="soc_stock_100cm") %>%
+  filter(indicator!="soc_stock_0_30cm") %>%
+  mutate(sig = ifelse(summary_pval<0.05, "significant", "not significant")) %>%
+  select(-study)
+
+# Make plot - land use on x axis, faceted by indicator
+lu_rma_plot <- ggplot(lu_rma_plot_df, aes(x=lu, y=es, ymax=es+se, ymin=es-se, color=label)) + 
+  geom_pointrange(size=1, linewidth=1) +
+  geom_text(aes(label=ifelse(sig=="significant", "*", "")), 
+            color="black", position=position_nudge(x=0.25), size=5) +
+  coord_flip() + 
+  geom_hline(yintercept=0, lty=2,linewidth=1) +
+  labs(x="Land use", y="Log response ratio") +
+  facet_wrap(vars(indicator), scales="free_x", labeller=labeller(indicator=indicator_labs)) +
+  scale_x_discrete(labels=indicator_labs) +
+  scale_color_viridis(discrete=TRUE, name="Management") +
+  theme_katy()
+lu_rma_plot
+ggsave(here("figs", "indicator_effect_sizes_lu.png"), width=12.25, height=9.5, units="in", dpi=400)
+
+# Make table with n for interpretability
+lu_n_df <- lu_rma %>%
+  select(indicator, label, lu, plot_df) %>%
+  ungroup() %>%
+  transmute(indicator, label, lu, plot_df) %>%
+  unnest(cols = c(plot_df)) %>%
+  count(indicator, label, lu, type) %>%
+  filter(type=="study") %>%
+  select(-type)
+flextable(lu_n_df)
+write_csv(lu_n_df, here("figs", "lu_n.csv"))
+
+## 2.4 - ARCHIVE - make plot of summary effect sizes for all indicators, grouped by tillage ----
+
+# Need to calculate another RMA with tillage as a grouping factor
+till_rma <- es_asp %>%
+  group_by(indicator, label, till) %>%
+  nest() %>%
+  mutate(rma_obj = map(data, ~rma(yi, vi, slab = proj_trt, data=.x, method="REML"))) %>%
+  mutate(rma_tidy = map(rma_obj, broom::tidy)) %>%
+  # make dataframe with effect sizes and variances for individual studies
+  mutate(study_df = map(rma_obj, ~data.frame(es = .x$yi,
+                                             se= sqrt(.x$vi),
+                                             type = "study",
+                                             study=.x$slab))) %>%
+  # make dataframe with overall random effects model estimate and standard error
+  mutate(summary_df = map(rma_obj, ~data.frame(es = .x$b,
+                                               se=.x$se,
+                                               type= "summary",
+                                               study="summary"))) %>%
+  # put two dfs together into one that can be used to make a forest plot
+  mutate(plot_df = map2(study_df, summary_df, rbind))
+
+# table for reporting
+till_rma_report_table <- till_rma %>%
+  mutate(report_df = map(rma_obj, ~data.frame(tau2 = .x$tau2,
+                                              i2 = .x$I2,
+                                              h2 = .x$H2,
+                                              q_stat = .x$QE,
+                                              q_pval = .x$QEp))) %>%
+  select(indicator, label, till, rma_tidy, report_df) %>%
+  ungroup() %>%
+  transmute(indicator, label, till, rma_tidy, report_df) %>%
+  unnest(cols = c(rma_tidy, report_df)) %>%
+  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant")) %>%
+  select(-term, -type) %>%
+  mutate(estimate = round(estimate, 3),
+         std.error = round(std.error, 3),
+         statistic = round(statistic, 2),
+         p.value = round(p.value, 3),
+         tau2 = round(tau2, 3),
+         i2 = round(i2, 2),
+         h2 = round(h2, 2),
+         q_stat = round(q_stat, 1),
+         q_pval = round(q_pval, 3))
+flextable(till_rma_report_table)
+write_csv(till_rma_report_table, here("figs", "till_rma_report_table.csv"))
+
+# pull out plotting data
+till_rma_plot_df <- till_rma %>%
+  select(indicator, label, till, plot_df, rma_tidy) %>%
+  ungroup() %>%
+  transmute(indicator, label, till, plot_df, rma_tidy) %>%
+  unnest(cols = c(plot_df, rma_tidy), names_sep = "_") %>%
+  select(indicator, label, till, plot_df_es, plot_df_se, plot_df_type, plot_df_study, rma_tidy_p.value) %>%
+  rename(es = plot_df_es,
+         se = plot_df_se,
+         type = plot_df_type,
+         study = plot_df_study,
+         summary_pval = rma_tidy_p.value) %>%
+  filter(type=="summary") %>%
+  filter(indicator!="soc_stock_100cm") %>%
+  filter(indicator!="soc_stock_0_30cm") %>%
+  mutate(sig = ifelse(summary_pval<0.05, "significant", "not significant")) %>%
+  select(-study)
+
+# Make plot - tillage on x axis, faceted by indicator
+till_rma_plot <- ggplot(till_rma_plot_df, aes(x=till, y=es, ymax=es+se, ymin=es-se, color=label)) + 
+  geom_pointrange(size=1, linewidth=1) +
+  geom_text(aes(label=ifelse(sig=="significant", "*", "")), 
+            color="black", position=position_nudge(x=0.25), size=5) +
+  coord_flip() + 
+  geom_hline(yintercept=0, lty=2,linewidth=1) +
+  labs(x="Tillage", y="Log response ratio") +
+  facet_wrap(vars(indicator), scales="free_x", labeller=labeller(indicator=indicator_labs)) +
+  scale_x_discrete(labels=indicator_labs) +
+  scale_color_viridis(discrete=TRUE, name="Management") +
+  theme_katy()
+till_rma_plot
+ggsave(here("figs", "indicator_effect_sizes_till.png"), width=12.25, height=9.5, units="in", dpi=400)
+
+# Make table with n for interpretability
+till_n_df <- till_rma %>%
+  select(indicator, label, till, plot_df) %>%
+  ungroup() %>%
+  transmute(indicator, label, till, plot_df) %>%
+  unnest(cols = c(plot_df)) %>%
+  count(indicator, label, till, type) %>%
+  filter(type=="study") %>%
+  select(-type)
+flextable(till_n_df)
+write_csv(till_n_df, here("figs", "till_n.csv"))
+
+## 2.5 - ARCHIVE - make plot of summary effect sizes for all indicators, grouped by climate ----
+
+# Need to calculate another RMA with climate as a grouping factor
+clim_rma <- es_asp %>%
+  group_by(indicator, label, climate) %>%
+  nest() %>%
+  mutate(rma_obj = map(data, ~rma(yi, vi, slab = proj_trt, data=.x, method="REML"))) %>%
+  mutate(rma_tidy = map(rma_obj, broom::tidy)) %>%
+  # make dataframe with effect sizes and variances for individual studies
+  mutate(study_df = map(rma_obj, ~data.frame(es = .x$yi,
+                                             se= sqrt(.x$vi),
+                                             type = "study",
+                                             study=.x$slab))) %>%
+  # make dataframe with overall random effects model estimate and standard error
+  mutate(summary_df = map(rma_obj, ~data.frame(es = .x$b,
+                                               se=.x$se,
+                                               type= "summary",
+                                               study="summary"))) %>%
+  # put two dfs together into one that can be used to make a forest plot
+  mutate(plot_df = map2(study_df, summary_df, rbind))
+
+# pull out plotting data
+clim_rma_plot_df <- clim_rma %>%
+  select(indicator, label, climate, plot_df, rma_tidy) %>%
+  ungroup() %>%
+  transmute(indicator, label, climate, plot_df, rma_tidy) %>%
+  unnest(cols = c(plot_df, rma_tidy), names_sep = "_") %>%
+  select(indicator, label, climate, plot_df_es, plot_df_se, plot_df_type, plot_df_study, rma_tidy_p.value) %>%
+  rename(es = plot_df_es,
+         se = plot_df_se,
+         type = plot_df_type,
+         study = plot_df_study,
+         summary_pval = rma_tidy_p.value) %>%
+  filter(type=="summary") %>%
+  filter(indicator!="soc_stock_100cm") %>%
+  filter(indicator!="soc_stock_0_30cm") %>%
+  mutate(sig = ifelse(summary_pval<0.05, "significant", "not significant")) %>%
+  select(-study)
+
+# Make plot - climate on x axis, faceted by indicator
+clim_rma_plot <- ggplot(clim_rma_plot_df, aes(x=climate, y=es, ymax=es+se, ymin=es-se, color=label)) + 
+  geom_pointrange(size=1, linewidth=1) +
+  geom_text(aes(label=ifelse(sig=="significant", "*", "")), 
+            color="black", position=position_nudge(x=0.25), size=5) +
+  coord_flip() + 
+  geom_hline(yintercept=0, lty=2,linewidth=1) +
+  labs(x="Climate", y="Log response ratio") +
+  facet_wrap(vars(indicator), scales="free_x", labeller=labeller(indicator=indicator_labs)) +
+  scale_x_discrete(labels=indicator_labs) +
+  scale_color_viridis(discrete=TRUE, name="Management") +
+  theme_katy()
+clim_rma_plot
+ggsave(here("figs", "indicator_effect_sizes_clim.png"), width=12.25, height=9.5, units="in", dpi=400)
+
+# Make table with n for interpretability
+clim_n_df <- clim_rma %>%
+  select(indicator, label, climate, plot_df) %>%
+  ungroup() %>%
+  transmute(indicator, label, climate, plot_df) %>%
+  unnest(cols = c(plot_df)) %>%
+  count(indicator, label, climate, type) %>%
+  filter(type=="study") %>%
+  select(-type)
+flextable(clim_n_df)
+write_csv(clim_n_df, here("figs", "clim_n.csv"))
+
+# 3 - Calculate random-effects models with moderating variables ----
+
+## 3.1 - Random-effects model with MAT as a moderator variable ----
+# Calculate random-effects model
+es_asp_rma_mat <- es_asp %>%
   group_by(indicator) %>%
-  arrange(p.value, .by_group = TRUE) %>%
-  mutate(across(where(is.numeric), ~ round(.x, 3)))
-flextable(es_asp_rma_sig)
-# The interesting thing is that some of the indicators where the random-effects model explained the most heterogeneity (e.g. KSSL WSA) do not actually have any significant moderating variables - that to me is a sign the model is overfit. Tillage is never a significant variable, so that really could be removed
+  nest() %>%
+  mutate(rma_obj = map(data, ~rma(yi, vi, slab = project, mod = ~ mat, data=.x, method="REML"))) %>%
+  mutate(rma_tidy = map(rma_obj, broom::tidy))
 
+# Make table for reporting, also include QM test of moderators
+mat_rma_report_table <- es_asp_rma_mat %>%
+  mutate(report_df = map(rma_obj, ~data.frame(tau2 = .x$tau2,
+                                              i2 = .x$I2,
+                                              h2 = .x$H2,
+                                              r2 = .x$R2,
+                                              q_stat = .x$QE,
+                                              q_pval = .x$QEp,
+                                              q_mod = .x$QM,
+                                              q_mod_pval = .x$QMp))) %>%
+  select(indicator, rma_tidy, report_df) %>%
+  ungroup() %>%
+  transmute(indicator, rma_tidy, report_df) %>%
+  unnest(cols = c(rma_tidy, report_df)) %>%
+  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant")) %>%
+  mutate(q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant")) %>%
+  filter(term != "intercept") %>%
+  select(-term, -type) %>%
+  mutate(estimate = round(estimate, 3),
+         std.error = round(std.error, 3),
+         statistic = round(statistic, 2),
+         p.value = round(p.value, 3),
+         tau2 = round(tau2, 3),
+         i2 = round(i2, 2),
+         h2 = round(h2, 2),
+         r2 = round(r2, 2),
+         q_stat = round(q_stat, 1),
+         q_pval = round(q_pval, 3),
+         q_mod = round(q_mod, 1),
+         q_mod_pval = round(q_mod_pval, 2))
+flextable(mat_rma_report_table)
+write_csv(mat_rma_report_table, here("figs", "mat_rma_report_table_full.csv"))
+
+# Extract significant moderator variables
+mat_rma_report_table_sig <- mat_rma_report_table %>%
+  filter(q_mod_sig=="significant") 
+flextable(mat_rma_report_table_sig)
 # Save CSV of significant moderator variables
-write_csv(es_asp_rma_sig, here("figs", "sig_moderating_vars.csv"))
+write_csv(mat_rma_report_table_sig, here("figs", "mat_rma_report_table_sig.csv"))
 
 # Plot significant moderator variables
 # MAT - Significant for ACE, acid phosphatase, arylsulfatase, bglucosaminidase, bglucosidase, SOC%
 
 # Make vector of indicators 
-mat_indicators <- c("ace", "acid_phosphatase", "arylsulfatase", "bglucosaminidase", "bglucosidase", "soc_pct")
+mat_indicators <- c("ace", "arylsulfatase", "bglucosaminidase", "bglucosidase", "soc_pct")
 
 # Plot with map function
 mat_plots <- map(.x = mat_indicators,
@@ -257,31 +539,78 @@ mat_plots <- map(.x = mat_indicators,
 
 # Now make into a panel grid with cowplot
 mat_ace <- pluck(mat_plots, 1)
-mat_acidp <- pluck(mat_plots, 2)
-mat_aryl <- pluck(mat_plots, 3)
-mat_bgm <- pluck(mat_plots, 4)
-mat_bg <- pluck(mat_plots, 5)
-mat_soc <- pluck(mat_plots, 6)
+mat_aryl <- pluck(mat_plots, 2)
+mat_bgm <- pluck(mat_plots, 3)
+mat_bg <- pluck(mat_plots, 4)
+mat_soc <- pluck(mat_plots, 5)
 
 mat_grid <- plot_grid(mat_ace + theme(legend.position="none", axis.title.x=element_blank()),
-                      mat_acidp + theme(legend.position="none", axis.title.y=element_blank()),
                       mat_aryl + theme(legend.position="none", axis.title.y=element_blank(), axis.title.x=element_blank()),
-                      mat_bgm + theme(legend.position="none", axis.title.x=element_blank()),
-                      mat_bg + theme(legend.position="none", axis.title.y=element_blank()),
-                      mat_soc + theme(legend.position="none", axis.title.y=element_blank(), axis.title.x=element_blank()),
+                      mat_bgm + theme(legend.position="none", axis.title.y=element_blank(), axis.title.x=element_blank()),
+                      mat_bg + theme(legend.position="none", axis.title.x=element_blank()),
+                      mat_soc + theme(legend.position="none", axis.title.y=element_blank()),
                       align = 'vh',
                       labels = c("A", "B", "C", "D", "E", "F"),
                       hjust = -1,
                       nrow = 2)
 
-mat_leg <- get_legend(mat_ace + theme(legend.box.margin = margin(0, 0, 0, 12)))
+mat_leg <- get_legend(mat_ace)
 
-plot_grid(mat_grid, mat_leg, rel_widths = c(3, .4))
-ggsave(here("figs", "mat_mod_reg.png"), width=12, height=8, units="in")
+plot_grid(mat_grid, mat_leg, rel_widths = c(3, .7))
+ggsave(here("figs", "mat_mod_reg.png"), width=11, height=8, units="in")
 
-# MAP - significant for arysulfatase, phosphodiesterase, respiration, and yoder aggregate stability
+## 3.2 - Random-effects model with MAP as a moderator variable ----
+# Calculate random-effects model
+es_asp_rma_map <- es_asp %>%
+  group_by(indicator) %>%
+  nest() %>%
+  mutate(rma_obj = map(data, ~rma(yi, vi, slab = project, mod = ~ map, data=.x, method="REML"))) %>%
+  mutate(rma_tidy = map(rma_obj, broom::tidy))
+
+# Make table for reporting, also include QM test of moderators
+map_rma_report_table <- es_asp_rma_map %>%
+  mutate(report_df = map(rma_obj, ~data.frame(tau2 = .x$tau2,
+                                              i2 = .x$I2,
+                                              h2 = .x$H2,
+                                              r2 = .x$R2,
+                                              q_stat = .x$QE,
+                                              q_pval = .x$QEp,
+                                              q_mod = .x$QM,
+                                              q_mod_pval = .x$QMp))) %>%
+  select(indicator, rma_tidy, report_df) %>%
+  ungroup() %>%
+  transmute(indicator, rma_tidy, report_df) %>%
+  unnest(cols = c(rma_tidy, report_df)) %>%
+  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant")) %>%
+  mutate(q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant")) %>%
+  filter(term != "intercept") %>%
+  select(-term, -type) %>%
+  mutate(estimate = round(estimate, 3),
+         std.error = round(std.error, 3),
+         statistic = round(statistic, 2),
+         p.value = round(p.value, 3),
+         tau2 = round(tau2, 3),
+         i2 = round(i2, 2),
+         h2 = round(h2, 2),
+         r2 = round(r2, 2),
+         q_stat = round(q_stat, 1),
+         q_pval = round(q_pval, 3),
+         q_mod = round(q_mod, 1),
+         q_mod_pval = round(q_mod_pval, 2))
+flextable(map_rma_report_table)
+write_csv(map_rma_report_table, here("figs", "map_rma_report_table_full.csv"))
+
+# Extract significant moderator variables
+map_rma_report_table_sig <- map_rma_report_table %>%
+  filter(q_mod_sig=="significant") 
+flextable(map_rma_report_table_sig)
+# Save CSV of significant moderator variables
+write_csv(map_rma_report_table_sig, here("figs", "map_rma_report_table_sig.csv"))
+
+# Plot significant moderator variables
+# MAP is significant for alkaline phosphatase, arylsulfatase, POX-C, and SOC stock 0-30cm
 # Make vector of indicators 
-map_indicators <- c("arylsulfatase", "phosphodiesterase","soil_respiration", "yoder_agg_stab_mwd")
+map_indicators <- c("alkaline_phosphatase", "arylsulfatase", "pox_c")
 
 # Plot with map function
 map_plots <- map(.x = map_indicators,
@@ -301,33 +630,79 @@ map_plots <- map(.x = map_indicators,
                  })
 
 # Now make into a panel grid with cowplot
-map_aryl <- pluck(map_plots, 1)
-map_phos <- pluck(map_plots, 2)
-map_resp <- pluck(map_plots, 3)
-map_agg <- pluck(map_plots, 4)
+map_alk <- pluck(map_plots, 1)
+map_aryl <- pluck(map_plots, 2)
+map_poxc <- pluck(map_plots, 3)
 
-map_grid <- plot_grid(map_aryl + theme(legend.position="none", axis.title.x=element_blank()),
-                      map_phos + theme(legend.position="none", axis.title.x=element_blank(), axis.title.y=element_blank()),
-                      map_resp + theme(legend.position="none", axis.title.x=element_blank()),
-                      map_agg + theme(legend.position="none", axis.title.x=element_blank(), axis.title.y=element_blank()),
+map_grid <- plot_grid(map_alk + theme(legend.position="none", axis.title.x=element_blank()),
+                      map_aryl + theme(legend.position="none", axis.title.x=element_blank(), axis.title.y=element_blank()),
+                      map_poxc + theme(legend.position="none", axis.title.x=element_blank(), axis.title.y=element_blank()),
                       align = 'vh',
-                      labels = c("A", "B", "C", "D"),
+                      labels = c("A", "B", "C"),
                       hjust = -1,
-                      nrow = 2)
+                      nrow = 1)
 
 map_grid_label <- ggdraw(map_grid) +
   draw_label(expression("Mean annual precipitation"~(mm~yr^-1)), color="black", vjust=0, y=0)
 
-map_leg <- get_legend(map_aryl + theme(legend.box.margin = margin(0, 0, 0, 12)))
+map_leg <- get_legend(map_aryl)
 
-plot_grid(map_grid_label, map_leg, rel_widths = c(3, .4))
-ggsave(here("figs", "map_mod_reg.png"), width=11, height=8, units="in")
+plot_grid(map_grid_label, map_leg, rel_widths = c(3, .7))
+ggsave(here("figs", "map_mod_reg.png"), width=11.5, height=4, units="in")
 
-# Land use - significant for alkaline phosphatase, bglucosaminidase, bulk density, phosphodiesterase, and soil respiration
-# Make vector of indicators
-lu_indicators <- c("alkaline_phosphatase", "bglucosaminidase", "bulk_density", "phosphodiesterase","soil_respiration")
+## 3.3 - Random-effects model with land use as a moderator variable ----
+# Calculate random-effects model
+es_asp_rma_lu <- es_asp %>%
+  group_by(indicator) %>%
+  nest() %>%
+  mutate(rma_obj = map(data, ~rma(yi, vi, slab = project, mod = ~ factor(lu), data=.x, method="REML"))) %>%
+  mutate(rma_tidy = map(rma_obj, broom::tidy))
 
-# Plot with map function
+# Make table for reporting, also include QM test of moderators
+lu_rma_report_table <- es_asp_rma_lu %>%
+  mutate(report_df = map(rma_obj, ~data.frame(tau2 = .x$tau2,
+                                              i2 = .x$I2,
+                                              h2 = .x$H2,
+                                              r2 = .x$R2,
+                                              q_stat = .x$QE,
+                                              q_pval = .x$QEp,
+                                              q_mod = .x$QM,
+                                              q_mod_pval = .x$QMp))) %>%
+  select(indicator, rma_tidy, report_df) %>%
+  ungroup() %>%
+  transmute(indicator, rma_tidy, report_df) %>%
+  unnest(cols = c(rma_tidy, report_df)) %>%
+  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant")) %>%
+  mutate(q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant")) %>%
+  filter(term != "intercept") %>%
+  select(-type) %>%
+  mutate(estimate = round(estimate, 3),
+         std.error = round(std.error, 3),
+         statistic = round(statistic, 2),
+         p.value = round(p.value, 3),
+         tau2 = round(tau2, 3),
+         i2 = round(i2, 2),
+         h2 = round(h2, 2),
+         r2 = round(r2, 2),
+         q_stat = round(q_stat, 1),
+         q_pval = round(q_pval, 3),
+         q_mod = round(q_mod, 1),
+         q_mod_pval = round(q_mod_pval, 2))
+flextable(lu_rma_report_table)
+write_csv(lu_rma_report_table, here("figs", "lu_rma_report_table_full.csv"))
+
+# Extract significant moderator variables
+lu_rma_report_table_sig <- lu_rma_report_table %>%
+  filter(q_mod_sig=="significant") 
+flextable(lu_rma_report_table_sig)
+# Save CSV of significant moderator variables
+write_csv(lu_rma_report_table_sig, here("figs", "lu_rma_report_table_sig.csv"))
+
+# Plot significant moderator variables
+lu_indicators_df <- lu_rma_report_table_sig %>%
+  distinct(indicator)
+lu_indicators <- as.vector(lu_indicators_df$indicator)
+
 lu_plots <- map(.x = lu_indicators,
                 .f = ~{
                   es_asp %>% 
@@ -342,30 +717,215 @@ lu_plots <- map(.x = lu_indicators,
                 })
 
 # Now make into a panel grid with cowplot
-lu_alk <- pluck(lu_plots, 1)
-lu_bgm <- pluck(lu_plots, 2)
-lu_bd <- pluck(lu_plots, 3)
-lu_pd <- pluck(lu_plots, 4)
-lu_resp <- pluck(lu_plots, 5)
+lu_bd <- pluck(lu_plots, 1)
+lu_kssl <- pluck(lu_plots, 2)
+lu_resp <- pluck(lu_plots, 3)
+lu_alk <- pluck(lu_plots, 4)
+lu_phos <- pluck(lu_plots, 5)
+lu_tn <- pluck(lu_plots, 6)
 
-lu_grid <- plot_grid(lu_alk + theme(legend.position="none", axis.title.x=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
-                     lu_bgm + theme(legend.position="none", axis.title.y=element_blank(), axis.text.x=element_text(angle=45, hjust=1)), 
-                     lu_bd + theme(legend.position="none", axis.title.y=element_blank(), 
+lu_grid <- plot_grid(lu_bd + theme(legend.position="none", 
+                                    axis.title.x=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
+                     lu_kssl + theme(legend.position="none", 
+                                    axis.title.y=element_blank(), axis.text.x=element_text(angle=45, hjust=1)), 
+                     lu_resp + theme(legend.position="none", axis.title.y=element_blank(), 
                                    axis.title.x=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
-                     lu_pd + theme(legend.position="none", axis.title.x=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
-                     lu_resp + theme(legend.position="none", axis.title.y=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
+                     lu_alk + theme(legend.position="none", 
+                                   axis.title.x=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
+                     lu_phos + theme(legend.position="none", 
+                                     axis.title.y=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
+                     lu_tn + theme(legend.position="none", 
+                                     axis.title.y=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
                      align = 'vh',
-                     labels = c("A", "B", "C", "D", "E"),
+                     labels = c("A", "B", "C", "D", "E", "F"),
                      hjust = -1,
                      nrow = 2)
 
 lu_leg <- get_legend(lu_alk + theme(legend.box.margin = margin(0, 0, 0, 12)))
 
-plot_grid(lu_grid, lu_leg, rel_widths = c(3, .4))
+plot_grid(lu_grid, lu_leg, rel_widths = c(3, .7))
 
-ggsave(here("figs", "lu_mod_box.png"), width=12, height=8, units="in")
+ggsave(here("figs", "lu_mod_box.png"), width=13, height=8, units="in")
 
-# 5 - Alternate versions of random-effects models with moderating variables with less explanatory power ----
+## 3.4 - Random-effects model with tillage as a moderator variable ----
+es_asp_rma_till <- es_asp %>%
+  group_by(indicator) %>%
+  nest() %>%
+  mutate(rma_obj = map(data, ~rma(yi, vi, slab = project, mod = ~ factor(till), data=.x, method="REML"))) %>%
+  mutate(rma_tidy = map(rma_obj, broom::tidy))
+
+# Make table for reporting, also include QM test of moderators
+till_rma_report_table <- es_asp_rma_till %>%
+  mutate(report_df = map(rma_obj, ~data.frame(tau2 = .x$tau2,
+                                              i2 = .x$I2,
+                                              h2 = .x$H2,
+                                              r2 = .x$R2,
+                                              q_stat = .x$QE,
+                                              q_pval = .x$QEp,
+                                              q_mod = .x$QM,
+                                              q_mod_pval = .x$QMp))) %>%
+  select(indicator, rma_tidy, report_df) %>%
+  ungroup() %>%
+  transmute(indicator, rma_tidy, report_df) %>%
+  unnest(cols = c(rma_tidy, report_df)) %>%
+  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant")) %>%
+  mutate(q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant")) %>%
+  filter(term != "intercept") %>%
+  select(-type) %>%
+  mutate(estimate = round(estimate, 3),
+         std.error = round(std.error, 3),
+         statistic = round(statistic, 2),
+         p.value = round(p.value, 3),
+         tau2 = round(tau2, 3),
+         i2 = round(i2, 2),
+         h2 = round(h2, 2),
+         r2 = round(r2, 2),
+         q_stat = round(q_stat, 1),
+         q_pval = round(q_pval, 3),
+         q_mod = round(q_mod, 1),
+         q_mod_pval = round(q_mod_pval, 2))
+flextable(till_rma_report_table)
+write_csv(till_rma_report_table, here("figs", "till_rma_report_table_full.csv"))
+
+# Extract significant moderator variables
+till_rma_report_table_sig <- till_rma_report_table %>%
+  filter(q_mod_sig=="significant") 
+flextable(till_rma_report_table_sig)
+# Save CSV of significant moderator variables
+write_csv(till_rma_report_table_sig, here("figs", "till_rma_report_table_sig.csv"))
+
+# Plot significant moderator variables
+# Tillage is significant for bulk density, KSSL WSA, Yoder WSA, and alkaline phosphatase
+till_indicators <- c("bulk_density", "kssl_wsa", "yoder_agg_stab_mwd", "alkaline_phosphatase")
+
+till_plots <- map(.x = till_indicators,
+                .f = ~{
+                  es_asp %>% 
+                    filter(indicator == .x) %>%
+                    ggplot(aes(x=till, y=yi, fill=label)) +
+                    geom_boxplot() +
+                    geom_hline(yintercept=0, linetype="dashed") +
+                    labs(x="Tillage", y="Log response ratio",
+                         title=glue::glue({filter(indicator_labs_df, indicator==.x)$label})) + 
+                    scale_fill_viridis(discrete=TRUE, name="Management") +
+                    theme_katy_grid()
+                })
+
+till_bd <- pluck(till_plots, 1)
+till_kssl <- pluck(till_plots, 2)
+till_yod <- pluck(till_plots, 3)
+till_alk <- pluck(till_plots, 4)
+
+till_grid <- plot_grid(till_bd + theme(legend.position="none", 
+                                   axis.title.x=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
+                     till_kssl + theme(legend.position="none", 
+                                     axis.title.y=element_blank(), axis.text.x=element_text(angle=45, hjust=1)), 
+                     till_yod + theme(legend.position="none", 
+                                      axis.title.x=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
+                     till_alk + theme(legend.position="none", 
+                                      axis.title.y=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
+                     align = 'vh',
+                     labels = c("A", "B", "C", "D"),
+                     hjust = -1,
+                     nrow = 2)
+
+till_leg <- get_legend(till_alk + theme(legend.box.margin = margin(0, 0, 0, 12)))
+
+plot_grid(till_grid, till_leg, rel_widths = c(3, .7))
+
+ggsave(here("figs", "till_mod_box.png"), width=10.5, height=8, units="in")
+
+## 3.5 - Random-effects model with clay% as a moderator variable ----
+# Calculate random-effects model
+es_asp_rma_clay <- es_asp %>%
+  group_by(indicator) %>%
+  nest() %>%
+  mutate(rma_obj = map(data, ~rma(yi, vi, slab = project, mod = ~ clay_mean, data=.x, method="REML"))) %>%
+  mutate(rma_tidy = map(rma_obj, broom::tidy))
+
+# Make table for reporting, also include QM test of moderators
+clay_rma_report_table <- es_asp_rma_clay %>%
+  mutate(report_df = map(rma_obj, ~data.frame(tau2 = .x$tau2,
+                                              i2 = .x$I2,
+                                              h2 = .x$H2,
+                                              r2 = .x$R2,
+                                              q_stat = .x$QE,
+                                              q_pval = .x$QEp,
+                                              q_mod = .x$QM,
+                                              q_mod_pval = .x$QMp))) %>%
+  select(indicator, rma_tidy, report_df) %>%
+  ungroup() %>%
+  transmute(indicator, rma_tidy, report_df) %>%
+  unnest(cols = c(rma_tidy, report_df)) %>%
+  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant")) %>%
+  mutate(q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant")) %>%
+  filter(term != "intercept") %>%
+  select(-term, -type) %>%
+  mutate(estimate = round(estimate, 3),
+         std.error = round(std.error, 3),
+         statistic = round(statistic, 2),
+         p.value = round(p.value, 3),
+         tau2 = round(tau2, 3),
+         i2 = round(i2, 2),
+         h2 = round(h2, 2),
+         r2 = round(r2, 2),
+         q_stat = round(q_stat, 1),
+         q_pval = round(q_pval, 3),
+         q_mod = round(q_mod, 1),
+         q_mod_pval = round(q_mod_pval, 2))
+flextable(clay_rma_report_table)
+write_csv(clay_rma_report_table, here("figs", "clay_rma_report_table_full.csv"))
+
+# 4 - ARCHIVE - Random-effects model with MAT, MAP, land use, and tillage as moderator variables in one model ----
+
+# One version of the model - group by indicators only (so Ref and SHM are tested in the same model), and include MAT, MAP, land use, and tillage as moderators
+es_asp_rma_all_mod <- es_asp %>%
+  group_by(indicator) %>%
+  nest() %>%
+  mutate(rma_obj = map(data, ~rma(yi, vi, slab = project, mod = ~ mat + map + factor(lu) + factor(till), data=.x, method="REML"))) %>%
+  mutate(rma_tidy = map(rma_obj, broom::tidy)) 
+
+# Make table for reporting, also include QM test of moderators
+all_mod_rma_report_table <- es_asp_rma %>%
+  mutate(report_df = map(rma_obj, ~data.frame(tau2 = .x$tau2,
+                                              i2 = .x$I2,
+                                              h2 = .x$H2,
+                                              r2 = .x$R2,
+                                              q_stat = .x$QE,
+                                              q_pval = .x$QEp,
+                                              q_mod = .x$QM,
+                                              q_mod_pval = .x$QMp))) %>%
+  select(indicator, rma_tidy, report_df) %>%
+  ungroup() %>%
+  transmute(indicator, rma_tidy, report_df) %>%
+  unnest(cols = c(rma_tidy, report_df)) %>%
+  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant")) %>%
+  mutate(q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant")) %>%
+  filter(term != "intercept") %>%
+  select(-type) %>%
+  mutate(estimate = round(estimate, 3),
+         std.error = round(std.error, 3),
+         statistic = round(statistic, 2),
+         p.value = round(p.value, 3),
+         tau2 = round(tau2, 3),
+         i2 = round(i2, 2),
+         h2 = round(h2, 2),
+         r2 = round(r2, 2),
+         q_stat = round(q_stat, 1),
+         q_pval = round(q_pval, 3),
+         q_mod = round(q_mod, 1),
+         q_mod_pval = round(q_mod_pval, 2))
+flextable(all_mod_rma_report_table)
+write_csv(all_mod_rma_report_table, here("figs", "all_mod_rma_report_table_full.csv"))
+
+# Extract significant moderator variables
+all_mod_rma_report_table_sig <- all_mod_rma_report_table %>%
+  filter(q_mod_sig=="significant") 
+flextable(all_mod_rma_report_table_sig)
+# Save CSV of significant moderator variables
+write_csv(all_mod_rma_report_table_sig, here("figs", "all_mod_rma_report_table_sig.csv"))
+
+# 5 - ARCHIVE - Alternate versions of random-effects models with moderating variables with less explanatory power ----
 # try another version of the model with MAT, MAP, and label instead of land use and tillage (more parsimonious to just compare cropping vs perennial)
 es_asp_rma2 <- es_asp %>%
   group_by(indicator) %>%
@@ -430,7 +990,7 @@ flextable(es_asp_rma_het3)
 
 # Overall lesson from all of these different models is that adding moderator variables tends to not explain a ton of indicator response to management
 
-# 6 - Sandbox of making graphs ----
+# 6 - ARCHIVE - Sandbox of making graphs ----
 # One question I had - do management decisions affect indicators differently in different climate types
 # we can graph this! (we can also model it :))
 

@@ -39,7 +39,7 @@ mean_sd <- list(
 )
 
 theme_katy <- function(base_size=14) {
-  theme_classic(base_size=base_size) %+replace%
+  theme_bw(base_size=base_size) %+replace%
     theme(# Legend
       legend.title=element_text(size=rel(1)), legend.text=element_text(size=rel(.8)),
       #axes                      
@@ -48,7 +48,7 @@ theme_katy <- function(base_size=14) {
 }
 
 theme_katy_grid <- function(base_size=14) {
-  theme_minimal(base_size=base_size) %+replace%
+  theme_bw(base_size=base_size) %+replace%
     theme(# Legend
       legend.title=element_text(size=rel(1)), legend.text=element_text(size=rel(.8)),
       #axes                      
@@ -62,32 +62,6 @@ theme_katy_grid <- function(base_size=14) {
 # Map and overview of DSP4SH projects
 
 Map of DSP4SH Projects:
-
-```{r table of project data}
-# Make a table with information about project, soil series, and climate
-project_distinct <- project %>%
-  distinct(project, label, lu, till, trt)
-
-# Get unique soil series
-project_soil <- project %>%
-  distinct(project, soil) %>%
-  group_by(project) %>%
-  mutate(count = paste("soil",seq(n()), sep="_")) %>%
-  pivot_wider(names_from=count, values_from=soil) %>%
-  unite("soils", soil_1:soil_3, sep=", ", na.rm=TRUE)
-flextable(project_soil)
-
-# Average climate data
-site_clim_sum <- project %>%
-  group_by(project) %>%
-  summarize(across(mat:map, ~ mean(.x, na.rm = TRUE)))
-
-# Join together
-project_table <- project_distinct %>%
-  left_join(project_soil, by="project") %>%
-  left_join(site_clim_sum, by="project")
-flextable(project_table)
-```
 
 ```{r map of DSP4SH sites}
 # Download map of USA from NaturalEarth as basemap
@@ -136,6 +110,14 @@ annotation <- tibble(project=c(rep("Illinois", 3),
                                   "BAU: Cropping with conventional tillage",
                                   "Ref: Perennial grassland",
                                   "SHM: No-till cropping"))
+# Get unique soil series
+project_soil <- project %>%
+  distinct(project, soil) %>%
+  group_by(project) %>%
+  mutate(count = paste("soil",seq(n()), sep="_")) %>%
+  pivot_wider(names_from=count, values_from=soil) %>%
+  unite("soils", soil_1:soil_3, sep=", ", na.rm=TRUE)
+flextable(project_soil)
 
 # Make annotation dataframe that includes project, label, soil, and xy coords
 project_annotate <- project %>% 
@@ -179,11 +161,19 @@ ggplot(data=usa_ne) +
 Generate overview table of project information:
 
 ```{r dsp4sh project overview table}
+# Average climate data
+site_clim_sum <- project %>%
+  group_by(project) %>%
+  summarize(across(mat:map, ~ mean(.x, na.rm = TRUE))) %>%
+  mutate(mat = round(mat, 1),
+         map = round(map, 0))
+
 project_table <- project_annotate %>%
   group_by(project) %>%
   select(project, soils, annotation) %>%
   separate_wider_delim(annotation, delim=": ", names=c("label", "description")) %>%
-  ungroup()
+  ungroup() %>%
+  left_join(site_clim_sum, by="project")
 flextable(project_table)
 ```
 

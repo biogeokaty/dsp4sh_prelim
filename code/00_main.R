@@ -40,7 +40,7 @@ library(tidyverse)
 
 # 1 - ggplot theme function ----
 theme_katy <- function(base_size=14) {
-  theme_minimal(base_size=base_size) %+replace%
+  theme_bw(base_size=base_size) %+replace%
     theme(# Legend
       legend.title=element_text(size=rel(1)), legend.text=element_text(size=rel(.8)),
       #axes                      
@@ -49,7 +49,7 @@ theme_katy <- function(base_size=14) {
 }
 
 theme_katy_grid <- function(base_size=14) {
-  theme_minimal(base_size=base_size) %+replace%
+  theme_bw(base_size=base_size) %+replace%
     theme(# Legend
       legend.title=element_text(size=rel(1)), legend.text=element_text(size=rel(.8)),
       #axes                      

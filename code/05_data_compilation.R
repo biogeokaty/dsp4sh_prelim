@@ -17,7 +17,7 @@ prism_clean <- prism %>%
   rename(map = prism_ppt_30yr_normal_800m_m4_annual_bil,
          mat = prism_tmean_30yr_normal_800m_m5_annual_bil)
 
-# Make dataframe of project overview with cliamte information from PRISM
+# Make dataframe of project overview with climate information from PRISM
 project_dat <- soc_pedon %>%
   select(dsp_pedon_id, label_full, label, lu, till, trt, project, soil, site, pedon_x, pedon_y) %>%
   left_join(prism_clean, by=c("dsp_pedon_id", "pedon_x", "pedon_y")) %>%

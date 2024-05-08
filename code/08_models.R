@@ -71,13 +71,13 @@ ind_long <- meta_df %>%
          soc_pct:yoder_agg_stab_mwd, soil_respiration:ace) %>%
   pivot_longer(soc_pct:ace, names_to="indicator", values_to="value")
 
-# I feel like what would make the most sense is to find the "best" model for each indicator
+## 4.1 - glmulti - all sites ----
 # use glmulti to find best model for each indicator, pull out the best model from the weight table, fit linear model, and extract fit metrics and coefficients
 multi <- ind_long %>%
   group_by(indicator) %>%
   nest() %>%
   mutate(multi_obj = map(data, ~glmulti("value", c("mat", "map", "lu", "till", "clay_tot_psa"), data=.x,
-                                      level = 1, maxsize = 3, confsetsize = 128))) %>%
+                                        level = 1, maxsize = 3, confsetsize = 128))) %>%
   mutate(weight = map(multi_obj, ~(weightable(.x) %>% slice_head(n=1)))) %>%
   transmute(indicator, data, weight) %>%
   unnest(cols = c(weight)) %>%
@@ -111,7 +111,7 @@ multi_partials <- multi %>%
 flextable(multi_partials)
 write_csv(multi_partials, here("figs", "indicator_partial_r2.csv"))
 
-# 4.1 Plot partial r2 for each indicator ----
+## 4.2 - plot partial R2 - all sites ----
 multi_partials_2plot <- multi_partials %>%
   filter(partial_r2 > 0.1) %>%
   mutate(var = factor(var, levels=c("luRANGE", "luGRASS", "luFOREST", "luFORAGE", "tillPerennial", "clay_tot_psa", "map", "mat")))
@@ -126,7 +126,7 @@ var_fill <- c("mat" = "#35978f",
               "luRANGE" = "#8c510a")
 
 ggplot(multi_partials_2plot, aes(fill=var, 
-                    y=partial_r2, x=fct_reorder(indicator, adj.r.squared))) + 
+                                 y=partial_r2, x=fct_reorder(indicator, adj.r.squared))) + 
   geom_bar(position="stack", stat="identity")+
   geom_text(aes(label = partial_r2), size=3, position=position_stack(vjust = 0.5)) +
   labs(x="Indicator", y=expression(Partial~R^2)) +
@@ -140,11 +140,73 @@ ggplot(multi_partials_2plot, aes(fill=var,
   coord_flip()
 ggsave(here("figs", "indicator_partial_r2.png"), height=5, width=9, units="in", dpi=400)
 
-scale_fill_brewer(name="Predictor variable", 
-                  labels=c("Soil Clay %", "LU - Forage", "LU - Forest", "LU - Grass", "LU - Rangeland",
-                           "MAP", "MAT", "Tillage - Untilled Perennial"),
-                  guide = guide_legend(reverse = TRUE),
-                  palette="BrBG") +
+## 4.3 - glmulti - reference sites only ----
+multi_ref <- ind_long %>%
+  filter(label=="Ref") %>%
+  group_by(indicator) %>%
+  nest() %>%
+  mutate(multi_obj = map(data, ~glmulti("value", c("mat", "map", "lu", "clay_tot_psa"), data=.x,
+                                      level = 1, maxsize = 3, confsetsize = 128))) %>%
+  mutate(weight = map(multi_obj, ~(weightable(.x) %>% slice_head(n=1)))) %>%
+  transmute(indicator, data, weight) %>%
+  unnest(cols = c(weight)) %>%
+  mutate(lm_obj = map(data, ~lm(model, data=.x))) %>%
+  mutate(part_r2 = map(lm_obj, ~as.data.frame(sensemakr::partial_r2(.x)) 
+                       %>% rownames_to_column() %>% rename(var = "rowname", partial_r2 = "sensemakr::partial_r2(.x)"))) %>%
+  mutate(lm_tidy = map(lm_obj, broom::glance)) %>%
+  mutate(lm_coefs = map(lm_obj, broom::tidy)) 
+
+# Make top model for each indicator into a nice table
+multi_table_ref <- multi_ref %>%
+  ungroup() %>%
+  transmute(indicator, model, lm_tidy) %>%
+  unnest(cols = c(lm_tidy)) %>%
+  mutate(sig = ifelse(p.value<0.05, "significant", "not significant")) %>%
+  arrange(desc(adj.r.squared)) %>%
+  select(indicator, model, adj.r.squared, p.value, AIC, nobs, sig) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3))) 
+flextable(multi_table_ref)
+write_csv(multi_table_ref, here("figs", "indicator_lm_ref.csv"))
+
+# Pull out the partial R2 values for all models
+multi_partials_ref <- multi_ref %>%
+  ungroup() %>%
+  transmute(indicator, model, lm_tidy, part_r2) %>%
+  unnest(cols=c(lm_tidy, part_r2)) %>%
+  select(indicator, model, adj.r.squared, var, partial_r2) %>%
+  filter(var!="(Intercept)") %>%
+  arrange(desc(adj.r.squared)) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 2))) 
+flextable(multi_partials_ref)
+write_csv(multi_partials, here("figs", "indicator_partial_r2_ref.csv"))
+
+## 4.4 - plot partial R2 - reference sites only ----
+multi_partials_2plot_ref <- multi_partials_ref %>%
+  filter(partial_r2 > 0.1) %>%
+  mutate(var = factor(var, levels=c("luRANGE", "luGRASS", "luFOREST", "luORCHARD", "clay_tot_psa", "map", "mat")))
+
+var_fill_ref <- c("mat" = "#35978f",
+              "map" = "#80cdc1",
+              "clay_tot_psa" = "#c7eae5",
+              "luORCHARD" = "#f6e8c3",
+              "luFOREST" = "#dfc27d",
+              "luGRASS" = "#bf812d",
+              "luRANGE" = "#8c510a")
+
+ggplot(multi_partials_2plot_ref, aes(fill=var, 
+                    y=partial_r2, x=fct_reorder(indicator, adj.r.squared))) + 
+  geom_bar(position="stack", stat="identity")+
+  geom_text(aes(label = partial_r2), size=3, position=position_stack(vjust = 0.5)) +
+  labs(x="Indicator", y=expression(Partial~R^2)) +
+  scale_x_discrete(labels=indicator_labs) +
+  scale_fill_manual(name="Predictor variable", 
+                    values=var_fill_ref,
+                    labels=c("LU - Rangeland", "LU - Grass", "LU - Forest", "LU - Orchard",
+                             "Soil Clay %", "MAP", "MAT"),
+                    guide = guide_legend(reverse = TRUE),) +
+  theme_katy() +
+  coord_flip()
+ggsave(here("figs", "indicator_partial_r2_ref.png"), height=5, width=9, units="in", dpi=400)
 
 # 5 - ARCHIVE - manually calling lm() for indicators ----
 # Make a version of the model with soil, MAT/MAP, land use, and tillage as predictors

@@ -120,10 +120,18 @@ ggplot(data=usa_ne) +
 ggsave(here("figs", "project_map_no_labs.png"), height=5, width=8, units="in", dpi=600)
 
 # 2 - Table of project information ----
+# Average climate data
+site_clim_sum <- project %>%
+  group_by(project) %>%
+  summarize(across(mat:map, ~ mean(.x, na.rm = TRUE))) %>%
+  mutate(mat = round(mat, 1),
+         map = round(map, 0))
+
 project_table <- project_annotate %>%
   group_by(project) %>%
   select(project, soils, annotation) %>%
   separate_wider_delim(annotation, delim=": ", names=c("label", "description")) %>%
-  ungroup()
+  ungroup() %>%
+  left_join(site_clim_sum, by="project")
 flextable(project_table)
 write_csv(project_table, here("figs", "project_descriptions.csv"))
