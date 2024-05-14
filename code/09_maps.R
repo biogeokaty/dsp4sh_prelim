@@ -12,7 +12,7 @@ usa_ne <- ne_states(country="united states of america")
 # What I want - just one point for each project label combination, text label describing project
 # Many projects have more than one type of treatment within a label - look at the data to be able to write a description that generally covers things: 
 project_distinct <- project %>%
-  distinct(project, label, lu, till, trt, explanation)
+  distinct(project, label, lu, till, trt)
 flextable(project_distinct)
 
 # Write tibble of annotation for each project/label based on project_distinct
@@ -132,6 +132,14 @@ project_table <- project_annotate %>%
   select(project, soils, annotation) %>%
   separate_wider_delim(annotation, delim=": ", names=c("label", "description")) %>%
   ungroup() %>%
-  left_join(site_clim_sum, by="project")
+  left_join(site_clim_sum, by="project") %>%
+  arrange(project, label)
 flextable(project_table)
 write_csv(project_table, here("figs", "project_descriptions.csv"))
+
+# alternative version of project information that has details on each treatment- maybe for supplement?
+treatment_table <- meta_df %>%
+  select(project, label, lu, till, trt, explanation) %>%
+  distinct() %>%
+  arrange(project)
+write_csv(treatment_table, here("figs", "project_treatment_table.csv"))

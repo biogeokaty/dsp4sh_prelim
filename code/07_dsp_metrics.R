@@ -11,7 +11,8 @@ surf <- read.csv(here("data_processed","05_surface_horizons.csv"))
 # can we automate with - list of indicators, plot boxplots across soil series x label, ANOVA and generate letters?
 # what are the indicators? soc_pct, soc_stock_hrz, tn_pct:yoder_agg_stab_mwd, p_h:ace
 surf_long <- surf %>%
-  select(dsp_pedon_id, soil, project, label, lu, climate, soc_pct, bulk_density, tn_pct:yoder_agg_stab_mwd, p_h:ace) %>%
+  select(dsp_pedon_id, soil, project, label, lu, climate, 
+         soc_pct, bulk_density, kssl_wsa:yoder_agg_stab_mwd, soil_respiration:acid_phosphatase, arylsulfatase:ace) %>%
   pivot_longer(soc_pct:ace, names_to="indicator", values_to="value")
 
 # Make list of indicators for purrr
@@ -154,7 +155,7 @@ write_csv(indicator_summary_lu, here("figs", "indicator_summary_lu.csv"))
 
 # 2 - Correlation matrix to see structure of indicator data ----
 indicators_only <- surf %>%
-  select(bulk_density, soc_pct, tn_pct:yoder_agg_stab_mwd, p_h:ace)
+  select(bulk_density, soc_pct, kssl_wsa:yoder_agg_stab_mwd, soil_respiration:acid_phosphatase, arylsulfatase:ace)
 indicators_normalized <- scale(indicators_only)
 
 # Plot correlation matrix
@@ -167,7 +168,7 @@ ggsave(here("figs", "surface_indicator_corrplot.png"), height=9, width=9, units=
 
 # Make a smaller version of correlation matrix for presentation
 indicators_red <- indicators_only %>%
-  select(soc_pct, tn_pct, kssl_wsa, ace, pox_c, acid_phosphatase, phosphodiesterase, bglucosidase, arylsulfatase) %>%
+  select(soc_pct, kssl_wsa, ace, pox_c, acid_phosphatase, bglucosidase, bglucosaminidase, arylsulfatase) %>%
   scale()
 
 corr_matrix2 <- cor(indicators_red, use="pairwise.complete.obs")
@@ -201,8 +202,7 @@ pca_loadings <- fviz_pca_var(imp_pca,
 pca_loadings
 ggsave(here("figs", "indicators_pca_loadings.png"), width=8, height=6, units="in")
 
-# plot pca with autoplot() function from ggfortify, colored by soil series
-# note - I had originally tried to do this as a biplot but I think that adding the loadings on top of the points really makes things too confusing
+# plot pca biplot with autoplot() function from ggfortify, colored by soil series
 pca_soil <- autoplot(imp_pca, data=surf, colour="soil", size=3,
                      loadings.label = TRUE, loadings.label.size = 4,
                      loadings.label.colour = 'black', loadings.color="black", 
@@ -242,7 +242,7 @@ ggsave(here("figs", "indicators_pca_clim.png"), width=8, height=6, units="in")
 # 4 - Redundancy analysis of indicators ?----
 
 
-# 4 ARCHIVE - Plot indicators that are the most sensitive to treatment (ANOVA) ----
+# 5 - ARCHIVE - Plot indicators that are the most sensitive to treatment (ANOVA) ----
 proj_anova <- surf_long %>%
   na.omit() %>%
   group_by(project, indicator) %>% 
@@ -291,7 +291,7 @@ ggplot(filter(indicator_sig_count, indicator!="p_h"), aes(x=fct_reorder(indicato
         legend.position = "none")
 ggsave(here("figs", "indicator_sig_count.png"), height=6, width=8, units="in")
 
-# 5 ARCHIVE - Grouped analysis of indicator sensitivity in surface soils across all projects using ANOVA and climate groupings ----
+# 6 - ARCHIVE - Grouped analysis of indicator sensitivity in surface soils across all projects using ANOVA and climate groupings ----
 # Attach climate data to horizon data
 # ANOVA to test significance of relationship between management and indicators within each project (nested within climate)
 ind_sig_clim <- surf_long %>%

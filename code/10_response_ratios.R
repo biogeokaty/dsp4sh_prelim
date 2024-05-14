@@ -15,7 +15,7 @@ mean_sd <- list(
 # Pivot data longer
 meta_long <- meta_df %>%
   select(project, dsp_pedon_id, soil, label, climate, lu, till, trt, soc_stock_0_30cm, soc_stock_100cm, 
-         soc_pct:yoder_agg_stab_mwd, soil_respiration:ace) %>%
+         soc_pct, bulk_density, kssl_wsa:yoder_agg_stab_mwd, soil_respiration:acid_phosphatase, arylsulfatase:ace) %>%
   pivot_longer(soc_stock_0_30cm:ace, names_to="indicator", values_to="value")
 
 # Make a new treatment variable with two values, BAU and ASP. ASP will contain all of the SHM and Ref soils.
@@ -162,7 +162,7 @@ es_rma_summary <- es_asp_rma_plot_df %>%
   mutate(sig = ifelse(summary_pval<0.05, "significant", "not significant")) %>%
   select(-study)
 
-ggplot(es_rma_summary, aes(x=fct_reorder(indicator, es), y=es, ymax=es+se, ymin=es-se, color=label)) + 
+ggplot(es_rma_summary, aes(x=fct_relevel(indicator, rev(indicator_plotting_order)), y=es, ymax=es+se, ymin=es-se, color=label)) + 
   geom_pointrange(size=1, linewidth=1) +
   geom_text(aes(label=ifelse(sig=="significant", "*", "")), 
             color="black", position=position_nudge(x=0.25), size=5) +
@@ -177,12 +177,16 @@ ggsave(here("figs", "indicator_effect_sizes.png"), width=8, height=5.5, units="i
 # Make table with n for interpretability
 es_rma_n_df <- es_asp_rma_nomod %>%
   select(indicator, label, plot_df) %>%
+  filter(indicator!="soc_stock_0_30cm") %>%
+  filter(indicator!="soc_stock_100cm") %>%
   ungroup() %>%
   transmute(indicator, label, plot_df) %>%
   unnest(cols = c(plot_df)) %>%
   count(indicator, label, type) %>%
   filter(type=="study") %>%
-  select(-type)
+  select(-type) %>%
+  mutate(indicator=factor(indicator, levels=indicator_plotting_order)) %>%
+  arrange(indicator, label)
 flextable(es_rma_n_df)
 write_csv(es_rma_n_df, here("figs", "es_rma_n.csv"))
 
@@ -199,8 +203,9 @@ rma_report_table <- es_asp_rma_nomod %>%
   ungroup() %>%
   transmute(indicator, label, rma_tidy, report_df) %>%
   unnest(cols = c(rma_tidy, report_df)) %>%
-  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant")) %>%
   select(-term, -type) %>%
+  filter(indicator!="soc_stock_0_30cm") %>%
+  filter(indicator!="soc_stock_100cm") %>%
   mutate(estimate = round(estimate, 3),
          std.error = round(std.error, 3),
          statistic = round(statistic, 2),
@@ -209,7 +214,10 @@ rma_report_table <- es_asp_rma_nomod %>%
          i2 = round(i2, 2),
          h2 = round(h2, 2),
          q_stat = round(q_stat, 1),
-         q_pval = round(q_pval, 3))
+         q_pval = round(q_pval, 3),
+         q_sig = ifelse(q_pval<0.05, "significant", "not significant"),
+         indicator = factor(indicator, levels=indicator_plotting_order)) %>%
+  arrange(indicator, label)
 flextable(rma_report_table)
 write_csv(rma_report_table, here("figs", "rma_report_table.csv"))
 
@@ -488,11 +496,13 @@ mat_rma_report_table <- es_asp_rma_mat %>%
   ungroup() %>%
   transmute(indicator, rma_tidy, report_df) %>%
   unnest(cols = c(rma_tidy, report_df)) %>%
-  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant")) %>%
-  mutate(q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant")) %>%
   filter(term != "intercept") %>%
+  filter(indicator!="soc_stock_0_30cm") %>%
+  filter(indicator!="soc_stock_100cm") %>%
   select(-term, -type) %>%
-  mutate(estimate = round(estimate, 3),
+  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant"),
+         q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant"),
+         estimate = round(estimate, 3),
          std.error = round(std.error, 3),
          statistic = round(statistic, 2),
          p.value = round(p.value, 3),
@@ -503,7 +513,9 @@ mat_rma_report_table <- es_asp_rma_mat %>%
          q_stat = round(q_stat, 1),
          q_pval = round(q_pval, 3),
          q_mod = round(q_mod, 1),
-         q_mod_pval = round(q_mod_pval, 2))
+         q_mod_pval = round(q_mod_pval, 2),
+         indicator = factor(indicator, levels=indicator_plotting_order)) %>%
+  arrange(indicator)
 flextable(mat_rma_report_table)
 write_csv(mat_rma_report_table, here("figs", "mat_rma_report_table_full.csv"))
 
@@ -550,7 +562,7 @@ mat_grid <- plot_grid(mat_ace + theme(legend.position="none", axis.title.x=eleme
                       mat_bg + theme(legend.position="none", axis.title.x=element_blank()),
                       mat_soc + theme(legend.position="none", axis.title.y=element_blank()),
                       align = 'vh',
-                      labels = c("A", "B", "C", "D", "E", "F"),
+                      labels = c("A", "B", "C", "D", "E"),
                       hjust = -1,
                       nrow = 2)
 
@@ -581,11 +593,13 @@ map_rma_report_table <- es_asp_rma_map %>%
   ungroup() %>%
   transmute(indicator, rma_tidy, report_df) %>%
   unnest(cols = c(rma_tidy, report_df)) %>%
-  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant")) %>%
-  mutate(q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant")) %>%
   filter(term != "intercept") %>%
+  filter(indicator!="soc_stock_0_30cm") %>%
+  filter(indicator!="soc_stock_100cm") %>%
   select(-term, -type) %>%
-  mutate(estimate = round(estimate, 3),
+  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant"),
+         q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant"),
+         estimate = round(estimate, 3),
          std.error = round(std.error, 3),
          statistic = round(statistic, 2),
          p.value = round(p.value, 3),
@@ -596,7 +610,9 @@ map_rma_report_table <- es_asp_rma_map %>%
          q_stat = round(q_stat, 1),
          q_pval = round(q_pval, 3),
          q_mod = round(q_mod, 1),
-         q_mod_pval = round(q_mod_pval, 2))
+         q_mod_pval = round(q_mod_pval, 2),
+         indicator = factor(indicator, levels=indicator_plotting_order)) %>%
+  arrange(indicator)
 flextable(map_rma_report_table)
 write_csv(map_rma_report_table, here("figs", "map_rma_report_table_full.csv"))
 
@@ -672,11 +688,13 @@ lu_rma_report_table <- es_asp_rma_lu %>%
   ungroup() %>%
   transmute(indicator, rma_tidy, report_df) %>%
   unnest(cols = c(rma_tidy, report_df)) %>%
-  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant")) %>%
-  mutate(q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant")) %>%
   filter(term != "intercept") %>%
+  filter(indicator!="soc_stock_0_30cm") %>%
+  filter(indicator!="soc_stock_100cm") %>%
   select(-type) %>%
-  mutate(estimate = round(estimate, 3),
+  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant"),
+         q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant"),
+         estimate = round(estimate, 3),
          std.error = round(std.error, 3),
          statistic = round(statistic, 2),
          p.value = round(p.value, 3),
@@ -687,7 +705,9 @@ lu_rma_report_table <- es_asp_rma_lu %>%
          q_stat = round(q_stat, 1),
          q_pval = round(q_pval, 3),
          q_mod = round(q_mod, 1),
-         q_mod_pval = round(q_mod_pval, 2))
+         q_mod_pval = round(q_mod_pval, 2),
+         indicator = factor(indicator, levels=indicator_plotting_order)) %>%
+  arrange(indicator)
 flextable(lu_rma_report_table)
 write_csv(lu_rma_report_table, here("figs", "lu_rma_report_table_full.csv"))
 
@@ -721,29 +741,26 @@ lu_bd <- pluck(lu_plots, 1)
 lu_kssl <- pluck(lu_plots, 2)
 lu_resp <- pluck(lu_plots, 3)
 lu_alk <- pluck(lu_plots, 4)
-lu_phos <- pluck(lu_plots, 5)
-lu_tn <- pluck(lu_plots, 6)
 
 lu_grid <- plot_grid(lu_bd + theme(legend.position="none", 
                                     axis.title.x=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
-                     lu_kssl + theme(legend.position="none", 
+                     lu_kssl + theme(legend.position="none", axis.title.x=element_blank(),
                                     axis.title.y=element_blank(), axis.text.x=element_text(angle=45, hjust=1)), 
-                     lu_resp + theme(legend.position="none", axis.title.y=element_blank(), 
+                     lu_resp + theme(legend.position="none",  
                                    axis.title.x=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
-                     lu_alk + theme(legend.position="none", 
+                     lu_alk + theme(legend.position="none", axis.title.y=element_blank(),
                                    axis.title.x=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
-                     lu_phos + theme(legend.position="none", 
-                                     axis.title.y=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
-                     lu_tn + theme(legend.position="none", 
-                                     axis.title.y=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
                      align = 'vh',
-                     labels = c("A", "B", "C", "D", "E", "F"),
+                     labels = c("A", "B", "C", "D"),
                      hjust = -1,
-                     nrow = 2)
+                     nrow = 2, ncol = 2)
+
+lu_grid_label <- ggdraw(lu_grid) +
+  draw_label("Land use", color="black", vjust=0, y=0)
 
 lu_leg <- get_legend(lu_alk + theme(legend.box.margin = margin(0, 0, 0, 12)))
 
-plot_grid(lu_grid, lu_leg, rel_widths = c(3, .7))
+plot_grid(lu_grid_label, lu_leg, rel_widths = c(3, .7))
 
 ggsave(here("figs", "lu_mod_box.png"), width=13, height=8, units="in")
 
@@ -768,11 +785,13 @@ till_rma_report_table <- es_asp_rma_till %>%
   ungroup() %>%
   transmute(indicator, rma_tidy, report_df) %>%
   unnest(cols = c(rma_tidy, report_df)) %>%
-  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant")) %>%
-  mutate(q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant")) %>%
   filter(term != "intercept") %>%
+  filter(indicator!="soc_stock_0_30cm") %>%
+  filter(indicator!="soc_stock_100cm") %>%
   select(-type) %>%
-  mutate(estimate = round(estimate, 3),
+  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant"),
+         q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant"),
+         estimate = round(estimate, 3),
          std.error = round(std.error, 3),
          statistic = round(statistic, 2),
          p.value = round(p.value, 3),
@@ -783,7 +802,9 @@ till_rma_report_table <- es_asp_rma_till %>%
          q_stat = round(q_stat, 1),
          q_pval = round(q_pval, 3),
          q_mod = round(q_mod, 1),
-         q_mod_pval = round(q_mod_pval, 2))
+         q_mod_pval = round(q_mod_pval, 2),
+         indicator = factor(indicator, levels=indicator_plotting_order)) %>%
+  arrange(indicator)
 flextable(till_rma_report_table)
 write_csv(till_rma_report_table, here("figs", "till_rma_report_table_full.csv"))
 
@@ -818,20 +839,23 @@ till_alk <- pluck(till_plots, 4)
 
 till_grid <- plot_grid(till_bd + theme(legend.position="none", 
                                    axis.title.x=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
-                     till_kssl + theme(legend.position="none", 
+                     till_kssl + theme(legend.position="none", axis.title.x=element_blank(),
                                      axis.title.y=element_blank(), axis.text.x=element_text(angle=45, hjust=1)), 
                      till_yod + theme(legend.position="none", 
                                       axis.title.x=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
-                     till_alk + theme(legend.position="none", 
+                     till_alk + theme(legend.position="none", axis.title.x=element_blank(),
                                       axis.title.y=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
                      align = 'vh',
                      labels = c("A", "B", "C", "D"),
                      hjust = -1,
                      nrow = 2)
 
+till_grid_label <- ggdraw(till_grid) +
+  draw_label("Tillage", color="black", vjust=0, y=0)
+
 till_leg <- get_legend(till_alk + theme(legend.box.margin = margin(0, 0, 0, 12)))
 
-plot_grid(till_grid, till_leg, rel_widths = c(3, .7))
+plot_grid(till_grid_label, till_leg, rel_widths = c(3, .7))
 
 ggsave(here("figs", "till_mod_box.png"), width=10.5, height=8, units="in")
 
@@ -842,6 +866,7 @@ es_asp_rma_clay <- es_asp %>%
   nest() %>%
   mutate(rma_obj = map(data, ~rma(yi, vi, slab = project, mod = ~ clay_mean, data=.x, method="REML"))) %>%
   mutate(rma_tidy = map(rma_obj, broom::tidy))
+# 7 studies are omitted from model fitting because of missing clay content data, I wouldn't really trust this...
 
 # Make table for reporting, also include QM test of moderators
 clay_rma_report_table <- es_asp_rma_clay %>%
@@ -857,11 +882,13 @@ clay_rma_report_table <- es_asp_rma_clay %>%
   ungroup() %>%
   transmute(indicator, rma_tidy, report_df) %>%
   unnest(cols = c(rma_tidy, report_df)) %>%
-  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant")) %>%
-  mutate(q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant")) %>%
   filter(term != "intercept") %>%
+  filter(indicator!="soc_stock_0_30cm") %>%
+  filter(indicator!="soc_stock_100cm") %>%
   select(-term, -type) %>%
-  mutate(estimate = round(estimate, 3),
+  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant"),
+         q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant"),
+         estimate = round(estimate, 3),
          std.error = round(std.error, 3),
          statistic = round(statistic, 2),
          p.value = round(p.value, 3),
@@ -872,9 +899,21 @@ clay_rma_report_table <- es_asp_rma_clay %>%
          q_stat = round(q_stat, 1),
          q_pval = round(q_pval, 3),
          q_mod = round(q_mod, 1),
-         q_mod_pval = round(q_mod_pval, 2))
+         q_mod_pval = round(q_mod_pval, 2),
+         indicator = factor(indicator, levels=indicator_plotting_order)) %>%
+  arrange(indicator)
 flextable(clay_rma_report_table)
 write_csv(clay_rma_report_table, here("figs", "clay_rma_report_table_full.csv"))
+
+# 4 - Evaluate indicator sensitivity and heterogeneity ----
+# want to rank indicators by heterogeneity?
+
+het_ranking <- rma_report_table %>%
+  filter(p.value<0.05) %>%
+  arrange(i2)
+flextable(het_ranking)
+# Indicators with the lowest I2 values are alkaline phosphatase, KSSL WSA, SOC...but in general I2 is really high
+
 
 # 4 - ARCHIVE - Random-effects model with MAT, MAP, land use, and tillage as moderator variables in one model ----
 

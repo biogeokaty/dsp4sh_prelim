@@ -22,10 +22,12 @@ library(factoextra)
 library(corrplot)
 library(lme4)
 library(ggeffects)
-library(partykit)
-library(vip)
 library(ggrepel)
+library(ggspatial)
 library(ggeasy)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
 library(viridis)
 library(cowplot)
 library(missMDA)
@@ -42,7 +44,7 @@ project <- read.csv(here("data_processed", "05_project_data.csv"))
 surf <- read.csv(here("data_processed","05_surface_horizons.csv"))
 meta_df <- read.csv(here("data_processed", "05_meta_df.csv"))
 
-# Make list os summary functionss - useful for generating summary tables
+# Make list of summary functions - useful for generating summary tables
 mean_sd <- list(
   mean = ~round(mean(.x, na.rm = TRUE), 2), 
   sd = ~round(sd(.x, na.rm = TRUE), 2)
@@ -87,7 +89,7 @@ indicator_labs <- c("soc_pct" = "SOC %",
                     "pox_c" = "POX-C",
                     "tn_pct" = "Total N%",
                     "bulk_density" = "Bulk density",
-                    "soil_respiration" = "Respiration",
+                    "soil_respiration" = "Soil respiration",
                     "phosphodiesterase" = "Phosphodiesterase",
                     "alkaline_phosphatase" = "Alkaline phosphatase",
                     "acid_phosphatase" = "Acid phosphatase",
@@ -98,11 +100,153 @@ indicator_labs_df <- data.frame(indicator_labs) %>%
   rownames_to_column() %>%
   rename(indicator = rowname,
          label = indicator_labs)
+
+# Pivot indicator data longer - needed for many analyses
+surf_long <- surf %>%
+  select(dsp_pedon_id, soil, project, label, lu, climate, 
+         soc_pct, bulk_density, kssl_wsa:yoder_agg_stab_mwd, soil_respiration:acid_phosphatase, arylsulfatase:ace) %>%
+  pivot_longer(soc_pct:ace, names_to="indicator", values_to="value")
+
+# Vector for indicator order for consistent plotting
+indicator_plotting_order <- c("bulk_density", "kssl_wsa", "yoder_agg_stab_mwd",
+                              "soc_pct", "ace", "pox_c",
+                              "soil_respiration","bglucosidase", "bglucosaminidase", 
+                              "acid_phosphatase", "alkaline_phosphatase", "arylsulfatase")
 ```
 
-# Project overview and environmental conditions
+# Project Background Information
 
-Table of range in environmental conditions - this is not for a table but is referenced directly in the text.
+## Maps and tables about DSP4SH projects
+
+Map of DSP4SH Projects:
+
+```{r map of DSP4SH sites}
+# Download map of USA from NaturalEarth as basemap
+usa_ne <- ne_states(country="united states of america")
+
+# Make dataframe for adding project data annotation to map, with just one point for each project label combination, text label describing project
+# Write tibble of annotation for each project/label based on project_distinct
+annotation <- tibble(project=c(rep("Illinois", 3), 
+                               rep("KansasState", 3),
+                               rep("NCState", 3),
+                               rep("OregonState", 3),
+                               rep("TexasA&MPt-1", 3),
+                               rep("TexasA&MPt-2", 3),
+                               rep("UConn", 3),
+                               rep("UTRGV", 2),
+                               rep("UnivOfMinnesota", 3),
+                               rep("WashingtonState", 3)),
+                     label=c(rep(c("BAU", "Ref", "SHM"), 7), "BAU", "Ref", rep(c("BAU", "Ref", "SHM"), 2)),
+                     annotation=c("BAU: Conventional and organic corn-soybean rotation",
+                                  "Ref: Forest restored in 1990",
+                                  "SHM: No-till corn-soybean rotation",
+                                  "BAU: Diverse crops with conventional tillage",
+                                  "Ref: Native rangeland",
+                                  "SHM: No-till diverse crops and cover cropping",
+                                  "BAU: Wheat and corn with conventional tillage",
+                                  "Ref: Forest",
+                                  "SHM: Hayed perennial grass",
+                                  "BAU: Ryegrass and Christmas tree with tillage",
+                                  "Ref: Timber forest and hazelnut orchard",
+                                  "SHM: No-till grass and vineyard",
+                                  "BAU: Cropping with conventional tillage",
+                                  "Ref: Native rangeland",
+                                  "SHM: No-till rye and mixed crops",
+                                  "BAU: Wheat and sorghum with conventional tillage",
+                                  "Ref: Native perennial forage",
+                                  "SHM: No-till wheat and sorghum",
+                                  "BAU: Corn with conventional tillage",
+                                  "Ref: Forest",
+                                  "SHM: No-till corn and hay",
+                                  "BAU: Diverse crops with conventional tillage",
+                                  "Ref: Native forest",
+                                  "BAU: Soybean with conventional tillage",
+                                  "Ref: Native rangeland",
+                                  "SHM: No-till soybean",
+                                  "BAU: Cropping with conventional tillage",
+                                  "Ref: Perennial grassland",
+                                  "SHM: No-till cropping"))
+# Get unique soil series
+project_soil <- project %>%
+  distinct(project, soil) %>%
+  group_by(project) %>%
+  mutate(count = paste("soil",seq(n()), sep="_")) %>%
+  pivot_wider(names_from=count, values_from=soil) %>%
+  unite("soils", soil_1:soil_3, sep=", ", na.rm=TRUE)
+flextable(project_soil)
+
+# Make annotation dataframe that includes project, label, soil, and xy coords
+project_annotate <- project %>% 
+  group_by(project, label) %>%
+  mutate(avg_lat = mean(pedon_y, na.rm=TRUE),
+         avg_long = mean(pedon_x, na.rm=TRUE)) %>%
+  distinct(project, label, avg_lat, avg_long) %>%
+  left_join(annotation, by=c("project", "label")) %>%
+  left_join(project_soil, by="project")
+
+# Make a dataframe with only one point per project to make the map labels
+project_labs <- project_annotate %>%
+  group_by(project) %>%
+  filter(label=="BAU") %>%
+  mutate(name_long = ifelse(project=="Illinois", "University of Illinois",
+                            ifelse(project=="OregonState", "Oregon State University",
+                                   ifelse(project=="UConn", "University of Connecticut",
+                                          ifelse(project=="UTRGV", "University of Texas - Rio Grande Valley",
+                                                 ifelse(project=="KansasState", "Kansas State University",
+                                                        ifelse(project=="NCState", "North Carolina State University",
+                                                               ifelse(project=="TexasA&MPt-1", "Texas A&M - 1",
+                                                                      ifelse(project=="TexasA&MPt-2", "Texas A&M - 2",
+                                                                             ifelse(project=="UnivOfMinnesota", "University of Minnesota", "Washington State University"))))))))))
+
+# Make map
+ggplot(data=usa_ne) +
+  geom_sf(fill=NA) +
+  coord_sf(xlim=c(-125.0, -66.93457), ylim=c(23.5, 49.384358)) + # set bounding box around CONUS
+  annotation_north_arrow(location="bl", which_north="true", height=unit(.25, "in"), width=unit(.25, "in"),
+                         pad_x = unit(0.4, "in"), pad_y = unit(0.25, "in"), style=north_arrow_fancy_orienteering) + # add north arrow
+  annotation_scale(location = "bl") +
+  geom_point(data=project_annotate, aes(x=avg_long, y=avg_lat, color=project)) +
+  geom_label_repel(data=project_labs, aes(x=avg_long, y=avg_lat, label=name_long),
+                   min.segment.length = 0, seed = 42, box.padding = 0.5) +
+  scale_color_viridis(discrete=TRUE) +
+  theme_classic() +
+  easy_remove_axes() +
+  theme(legend.position="none")
+```
+
+Generate overview table of project information:
+
+```{r dsp4sh project overview table}
+# Average climate data - to be added in to project overview table
+site_clim_sum <- project %>%
+  group_by(project) %>%
+  summarize(across(mat:map, ~ mean(.x, na.rm = TRUE))) %>%
+  mutate(mat = round(mat, 1),
+         map = round(map, 0))
+
+project_table <- project_annotate %>%
+  group_by(project) %>%
+  select(project, soils, annotation) %>%
+  separate_wider_delim(annotation, delim=": ", names=c("label", "description")) %>%
+  ungroup() %>%
+  left_join(site_clim_sum, by="project") %>%
+  arrange(project, label)
+flextable(project_table)
+```
+
+Table with more detail on each project treatment:
+
+```{r project and treatment details table}
+treatment_table <- meta_df %>%
+  select(project, label, lu, trt, explanation) %>%
+  distinct() %>%
+  arrange(project)
+```
+
+## Environmental data tables
+
+Table of range in environmental conditions - this is not for a table but is referenced directly in the text:
+
 ```{r range of environmental characteristics across all sites}
 site_range_table <- project %>%
   summarize(across(where(is.numeric), min_max)) %>%
@@ -116,10 +260,6 @@ site_range_table <- project %>%
 flextable(site_range_table)
 
 # range in indicator values across all sites
-# Pivot indicator data longer
-surf_long <- surf %>%
-  select(dsp_pedon_id, soil, project, label, lu, climate, soc_pct, bulk_density, tn_pct:yoder_agg_stab_mwd, p_h:ace) %>%
-  pivot_longer(soc_pct:ace, names_to="indicator", values_to="value")
 
 indicator_range_table <- surf_long %>%
   group_by(indicator) %>%
@@ -303,7 +443,7 @@ Correlation matrix:
 
 ``` {r correlation matrix of soil health indicators}
 indicators_only <- surf %>%
-  select(bulk_density, soc_pct, tn_pct:yoder_agg_stab_mwd, p_h:ace)
+  select(bulk_density, soc_pct, kssl_wsa:yoder_agg_stab_mwd, soil_respiration:acid_phosphatase, arylsulfatase:ace)
 indicators_normalized <- scale(indicators_only)
 
 # Plot correlation matrix - full version
@@ -315,7 +455,7 @@ ggcorrplot(corr_matrix, p.mat=corr_pmat, hc.order=TRUE, type="lower", lab=TRUE, 
 
 # Plot a reduced version showing most significantly correlated variables
 indicators_red <- indicators_only %>%
-  select(soc_pct, tn_pct, kssl_wsa, ace, pox_c, acid_phosphatase, phosphodiesterase, bglucosidase, arylsulfatase) %>%
+  select(soc_pct, kssl_wsa, ace, pox_c, acid_phosphatase, bglucosidase, bglucosaminidase, arylsulfatase) %>%
   scale()
 
 corr_matrix2 <- cor(indicators_red, use="pairwise.complete.obs")
@@ -401,49 +541,6 @@ This finding is really consistent with what we see by looking at just the SOC da
 
 I also tried a PCA score plot colored by climate. This shows that data cluster fairly strongly by climate. However, I am hesitant to read too much into this, as many climates are represented by only one project. This may really be showing that data cluster strongly by project, which is to be expected (and consistent with analyses so far).
 
-## Random forest to determine which indicators are most associated with SOC stocks and identify important covariates
-
-Random forest takes a long time to run, so start by plotting a conditional inference tree to get a sense of important variables associated with SOC stocks:
-
-```{r conditional inference tree of variable importance for SOC stocks}
-# prep data for random forest
-soc_df <- meta_df %>%
-  mutate(across(where(is.character), as.factor)) %>%
-  filter(!is.na(soc_stock_100cm)) # Filter out rows with no SOC stock data - they mess with the random forest model later on
-
-# First plot a conditional inference tree - with land use variables and top 5 soil health metrics (based on correlation with SOC)
-soc_tree <- ctree(soc_stock_100cm ~ soc_pct + ace + bglucosidase + yoder_agg_stab_mwd + kssl_wsa + bglucosaminidase +
-                    label + lu + till + soil + mat + map + clay_tot_psa, data=soc_df)
-plot(soc_tree)
-
-# try a version that doesn't include soil series - want to look at the underlying factors integrated by soil series
-soc_tree2 <- ctree(soc_stock_100cm ~ soc_pct + ace + bglucosidase + yoder_agg_stab_mwd + kssl_wsa + bglucosaminidase +
-                     label + lu + till + mat + map + clay_tot_psa, data=soc_df)
-plot(soc_tree2)
-
-# remove SOC from model
-soc_tree3 <- ctree(soc_stock_100cm ~ ace + bglucosidase + yoder_agg_stab_mwd + kssl_wsa + bglucosaminidase +
-                     label + lu + till + mat + map + clay_tot_psa, data=soc_df)
-plot(soc_tree3)
-```
-
-Soil series is the most important determinant of SOC stocks (100cm depth), followed by SOC% and land use. If soil series is removed, SOC% is the most important variable (somewhat obvious - SOC stocks are calculated from SOC%). If soil series and SOC% are removed, first split is MAT, followed by ACE/MAP, then land use and treatment
-
-Random forest and variable importance analyses:
-
-```{r random forest analysis of variable importance for SOC stocks}
-# Should include soil series in this analysis to see if this provides more data than MAT/MAP
-soc_forest <- cforest(soc_stock_100cm ~ ace + bglucosidase + yoder_agg_stab_mwd + kssl_wsa + bglucosaminidase +
-                        label + lu + till + mat + map + soil + clay_tot_psa, data=soc_df, ntree=30000)
-soc_vi <- vi(soc_forest)
-soc_vip <- vip(soc_vi, geom="col")
-soc_vip
-```
-
-The most important variables for predicting SOC stocks to 100 cm are: soil, MAT, ACE, MAP, land use, clay content, label, and tillage. I'm not sure if the indicators (bglucosaminidase, bglucosidase, KSSL WSA, and Yoder agg stab) being less important is due to missing data for some of those measurements in some projects.
-
-Overall, this tells us that between-project differences in SOC are much more evident than within-project differences. And, ACE is very closely related to overall SOC stocks!
-
 ## Identify environmental covariates of indicators
 
 We can try to tease out some of the drivers of variability in indicator values across the dataset - this is helpful to understand if differences in indicator values are driven by soil, climate, land use, etc.
@@ -452,7 +549,7 @@ We can try to tease out some of the drivers of variability in indicator values a
 # Pivot indicator data (with environmental covariates attached) to longer
 ind_long <- meta_df %>%
   select(project, dsp_pedon_id, soil, label, climate, mat, map, lu, till, clay_tot_psa, soc_stock_0_30cm, soc_stock_100cm, 
-         soc_pct:yoder_agg_stab_mwd, soil_respiration:ace) %>%
+         soc_pct, bulk_density, kssl_wsa:yoder_agg_stab_mwd, soil_respiration:acid_phosphatase, arylsulfatase:ace) %>%
   pivot_longer(soc_pct:ace, names_to="indicator", values_to="value")
 
 # use glmulti to find best model for each indicator
@@ -512,7 +609,7 @@ var_fill <- c("mat" = "#35978f",
 
 # plot
 ggplot(multi_partials_2plot, aes(fill=var, 
-                    y=partial_r2, x=fct_reorder(indicator, adj.r.squared))) + 
+                                 y=partial_r2, x=fct_relevel(indicator, rev(indicator_plotting_order)))) + 
   geom_bar(position="stack", stat="identity")+
   geom_text(aes(label = partial_r2), size=3, position=position_stack(vjust = 0.5)) +
   labs(x="Indicator", y=expression(Partial~R^2)) +
@@ -578,25 +675,24 @@ flextable(multi_partials_ref)
 ```{r plot partial r2 of significant predictors - reference sites}
 multi_partials_2plot_ref <- multi_partials_ref %>%
   filter(partial_r2 > 0.1) %>%
-  mutate(var = factor(var, levels=c("luRANGE", "luGRASS", "luFOREST", "luORCHARD", "clay_tot_psa", "map", "mat")))
+  mutate(var = factor(var, levels=c("luRANGE", "luGRASS", "luFOREST", "clay_tot_psa", "map", "mat")))
 
 var_fill_ref <- c("mat" = "#35978f",
               "map" = "#80cdc1",
               "clay_tot_psa" = "#c7eae5",
-              "luORCHARD" = "#f6e8c3",
               "luFOREST" = "#dfc27d",
               "luGRASS" = "#bf812d",
               "luRANGE" = "#8c510a")
 
 ggplot(multi_partials_2plot_ref, aes(fill=var, 
-                    y=partial_r2, x=fct_reorder(indicator, adj.r.squared))) + 
+                    y=partial_r2, x=fct_relevel(indicator, rev(indicator_plotting_order)))) + 
   geom_bar(position="stack", stat="identity")+
   geom_text(aes(label = partial_r2), size=3, position=position_stack(vjust = 0.5)) +
   labs(x="Indicator", y=expression(Partial~R^2)) +
   scale_x_discrete(labels=indicator_labs) +
   scale_fill_manual(name="Predictor variable", 
                     values=var_fill_ref,
-                    labels=c("LU - Rangeland", "LU - Grass", "LU - Forest", "LU - Orchard",
+                    labels=c("LU - Rangeland", "LU - Grass", "LU - Forest",
                              "Soil Clay %", "MAP", "MAT"),
                     guide = guide_legend(reverse = TRUE),) +
   theme_katy() +
@@ -623,7 +719,7 @@ Prep data for effect size calculation:
 # Pivot data longer
 meta_long <- meta_df %>%
   select(project, dsp_pedon_id, soil, label, climate, lu, till, trt, soc_stock_0_30cm, soc_stock_100cm, 
-         soc_pct:yoder_agg_stab_mwd, soil_respiration:ace) %>%
+         soc_pct, bulk_density, kssl_wsa:yoder_agg_stab_mwd, soil_respiration:acid_phosphatase, arylsulfatase:ace) %>%
   pivot_longer(soc_stock_0_30cm:ace, names_to="indicator", values_to="value")
 
 # Make a new treatment variable with two values, BAU and ASP. ASP will contain all of the SHM and Ref soils.
@@ -746,19 +842,6 @@ plot_list3 <- map2(.x = indicators2,
                   })
 
 plot_list3
-
-# pull out significant indicators and make a table
-es_asp_rma_sig <- es_asp_rma_nomod %>%
-  ungroup() %>%
-  transmute(indicator, label, rma_tidy) %>%
-  unnest(cols = c(rma_tidy)) %>%
-  mutate(sig = ifelse(p.value<0.05, "significant", "not significant")) %>%
-  group_by(indicator) %>%
-  arrange(p.value) %>%
-  select(-term, -type, -std.error, -statistic) %>%
-  mutate(estimate = round(estimate, 3),
-         p.value = round(p.value, 3))
-flextable(es_asp_rma_sig)
 ```
 
 Observations from forest plots: 
@@ -774,6 +857,8 @@ Observations from forest plots:
 - Soil respiration is wild - no change in some studies, wide range of values in others that center around zero, and very responsive sometimes (University of Minnesota, Oregon State)
 - Aggregate stability (Yoder) is higher in Ref and SHM for most studies - interestingly not Texas A&M Pt 1
 
+It's also helpful to plot the overall effect size for each indicator:
+
 ```{r plot of summary effect sizes for all indicators}
 # make dataframe for plotting
 es_rma_summary <- es_asp_rma_plot_df %>%
@@ -783,8 +868,7 @@ es_rma_summary <- es_asp_rma_plot_df %>%
   mutate(sig = ifelse(summary_pval<0.05, "significant", "not significant")) %>%
   select(-study)
 
-# make plot
-ggplot(es_rma_summary, aes(x=fct_reorder(indicator, es), y=es, ymax=es+se, ymin=es-se, color=label)) + 
+ggplot(es_rma_summary, aes(x=fct_relevel(indicator, rev(indicator_plotting_order)), y=es, ymax=es+se, ymin=es-se, color=label)) + 
   geom_pointrange(size=1, linewidth=1) +
   geom_text(aes(label=ifelse(sig=="significant", "*", "")), 
             color="black", position=position_nudge(x=0.25), size=5) +
@@ -798,18 +882,51 @@ ggplot(es_rma_summary, aes(x=fct_reorder(indicator, es), y=es, ymax=es+se, ymin=
 # Make table with n for interpretability
 es_rma_n_df <- es_asp_rma_nomod %>%
   select(indicator, label, plot_df) %>%
+  filter(indicator!="soc_stock_0_30cm") %>%
+  filter(indicator!="soc_stock_100cm") %>%
   ungroup() %>%
   transmute(indicator, label, plot_df) %>%
   unnest(cols = c(plot_df)) %>%
   count(indicator, label, type) %>%
   filter(type=="study") %>%
-  select(-type)
+  select(-type) %>%
+  mutate(indicator=factor(indicator, levels=indicator_plotting_order)) %>%
+  arrange(indicator, label)
 flextable(es_rma_n_df)
 ```
 
 The indicators with the largest effect sizes are: arylsulfatase, aggregate stability (KSSL), aggregate stability (Yoder MWD), ACE, BG, SOC%, and POX-c.
 - Interestingly, the indicators with the biggest effect sizes in the Ref state (arylsulfatase and both aggregate stabilities) are much lower in the SHM state.
 - ACE, BG, SOC% and POX-C all have smaller effect sizes (still significant for both treatments) but magnitude of responses is similar between Ref and SHM conditions.
+
+```{r table summarizing overall random effects model}
+rma_report_table <- es_asp_rma_nomod %>%
+  mutate(report_df = map(rma_obj, ~data.frame(tau2 = .x$tau2,
+                                              i2 = .x$I2,
+                                              h2 = .x$H2,
+                                              q_stat = .x$QE,
+                                              q_pval = .x$QEp))) %>%
+  select(indicator, label, rma_tidy, report_df) %>%
+  ungroup() %>%
+  transmute(indicator, label, rma_tidy, report_df) %>%
+  unnest(cols = c(rma_tidy, report_df)) %>%
+  select(-term, -type) %>%
+  filter(indicator!="soc_stock_0_30cm") %>%
+  filter(indicator!="soc_stock_100cm") %>%
+  mutate(estimate = round(estimate, 3),
+         std.error = round(std.error, 3),
+         statistic = round(statistic, 2),
+         p.value = round(p.value, 3),
+         tau2 = round(tau2, 3),
+         i2 = round(i2, 2),
+         h2 = round(h2, 2),
+         q_stat = round(q_stat, 1),
+         q_pval = round(q_pval, 3),
+         q_sig = ifelse(q_pval<0.05, "significant", "not significant"),
+         indicator = factor(indicator, levels=indicator_plotting_order)) %>%
+  arrange(indicator, label)
+flextable(rma_report_table)
+```
 
 ## Calculate random-effects models with moderating variables
 
@@ -838,11 +955,13 @@ mat_rma_report_table <- es_asp_rma_mat %>%
   ungroup() %>%
   transmute(indicator, rma_tidy, report_df) %>%
   unnest(cols = c(rma_tidy, report_df)) %>%
-  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant")) %>%
-  mutate(q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant")) %>%
   filter(term != "intercept") %>%
+  filter(indicator!="soc_stock_0_30cm") %>%
+  filter(indicator!="soc_stock_100cm") %>%
   select(-term, -type) %>%
-  mutate(estimate = round(estimate, 3),
+  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant"),
+         q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant"),
+         estimate = round(estimate, 3),
          std.error = round(std.error, 3),
          statistic = round(statistic, 2),
          p.value = round(p.value, 3),
@@ -853,7 +972,9 @@ mat_rma_report_table <- es_asp_rma_mat %>%
          q_stat = round(q_stat, 1),
          q_pval = round(q_pval, 3),
          q_mod = round(q_mod, 1),
-         q_mod_pval = round(q_mod_pval, 2))
+         q_mod_pval = round(q_mod_pval, 2),
+         indicator = factor(indicator, levels=indicator_plotting_order)) %>%
+  arrange(indicator)
 flextable(mat_rma_report_table)
 
 # Extract significant moderator variables
@@ -898,7 +1019,7 @@ mat_grid <- plot_grid(mat_ace + theme(legend.position="none", axis.title.x=eleme
                       mat_bg + theme(legend.position="none", axis.title.x=element_blank()),
                       mat_soc + theme(legend.position="none", axis.title.y=element_blank()),
                       align = 'vh',
-                      labels = c("A", "B", "C", "D", "E", "F"),
+                      labels = c("A", "B", "C", "D", "E"),
                       hjust = -1,
                       nrow = 2)
 
@@ -934,11 +1055,13 @@ map_rma_report_table <- es_asp_rma_map %>%
   ungroup() %>%
   transmute(indicator, rma_tidy, report_df) %>%
   unnest(cols = c(rma_tidy, report_df)) %>%
-  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant")) %>%
-  mutate(q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant")) %>%
   filter(term != "intercept") %>%
+  filter(indicator!="soc_stock_0_30cm") %>%
+  filter(indicator!="soc_stock_100cm") %>%
   select(-term, -type) %>%
-  mutate(estimate = round(estimate, 3),
+  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant"),
+         q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant"),
+         estimate = round(estimate, 3),
          std.error = round(std.error, 3),
          statistic = round(statistic, 2),
          p.value = round(p.value, 3),
@@ -949,7 +1072,9 @@ map_rma_report_table <- es_asp_rma_map %>%
          q_stat = round(q_stat, 1),
          q_pval = round(q_pval, 3),
          q_mod = round(q_mod, 1),
-         q_mod_pval = round(q_mod_pval, 2))
+         q_mod_pval = round(q_mod_pval, 2),
+         indicator = factor(indicator, levels=indicator_plotting_order)) %>%
+  arrange(indicator)
 flextable(map_rma_report_table)
 
 # Extract significant moderator variables
@@ -1027,11 +1152,13 @@ lu_rma_report_table <- es_asp_rma_lu %>%
   ungroup() %>%
   transmute(indicator, rma_tidy, report_df) %>%
   unnest(cols = c(rma_tidy, report_df)) %>%
-  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant")) %>%
-  mutate(q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant")) %>%
   filter(term != "intercept") %>%
+  filter(indicator!="soc_stock_0_30cm") %>%
+  filter(indicator!="soc_stock_100cm") %>%
   select(-type) %>%
-  mutate(estimate = round(estimate, 3),
+  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant"),
+         q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant"),
+         estimate = round(estimate, 3),
          std.error = round(std.error, 3),
          statistic = round(statistic, 2),
          p.value = round(p.value, 3),
@@ -1042,7 +1169,9 @@ lu_rma_report_table <- es_asp_rma_lu %>%
          q_stat = round(q_stat, 1),
          q_pval = round(q_pval, 3),
          q_mod = round(q_mod, 1),
-         q_mod_pval = round(q_mod_pval, 2))
+         q_mod_pval = round(q_mod_pval, 2),
+         indicator = factor(indicator, levels=indicator_plotting_order)) %>%
+  arrange(indicator)
 flextable(lu_rma_report_table)
 
 # Extract significant moderator variables
@@ -1074,29 +1203,26 @@ lu_bd <- pluck(lu_plots, 1)
 lu_kssl <- pluck(lu_plots, 2)
 lu_resp <- pluck(lu_plots, 3)
 lu_alk <- pluck(lu_plots, 4)
-lu_phos <- pluck(lu_plots, 5)
-lu_tn <- pluck(lu_plots, 6)
 
 lu_grid <- plot_grid(lu_bd + theme(legend.position="none", 
                                     axis.title.x=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
-                     lu_kssl + theme(legend.position="none", 
+                     lu_kssl + theme(legend.position="none", axis.title.x=element_blank(),
                                     axis.title.y=element_blank(), axis.text.x=element_text(angle=45, hjust=1)), 
-                     lu_resp + theme(legend.position="none", axis.title.y=element_blank(), 
+                     lu_resp + theme(legend.position="none",  
                                    axis.title.x=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
-                     lu_alk + theme(legend.position="none", 
+                     lu_alk + theme(legend.position="none", axis.title.y=element_blank(),
                                    axis.title.x=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
-                     lu_phos + theme(legend.position="none", 
-                                     axis.title.y=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
-                     lu_tn + theme(legend.position="none", 
-                                     axis.title.y=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
                      align = 'vh',
-                     labels = c("A", "B", "C", "D", "E", "F"),
+                     labels = c("A", "B", "C", "D"),
                      hjust = -1,
-                     nrow = 2)
+                     nrow = 2, ncol = 2)
+
+lu_grid_label <- ggdraw(lu_grid) +
+  draw_label("Land use", color="black", vjust=0, y=0)
 
 lu_leg <- get_legend(lu_alk + theme(legend.box.margin = margin(0, 0, 0, 12)))
 
-plot_grid(lu_grid, lu_leg, rel_widths = c(3, .7))
+plot_grid(lu_grid_label, lu_leg, rel_widths = c(3, .7))
 ```
 
 Takeaways:
@@ -1126,11 +1252,13 @@ till_rma_report_table <- es_asp_rma_till %>%
   ungroup() %>%
   transmute(indicator, rma_tidy, report_df) %>%
   unnest(cols = c(rma_tidy, report_df)) %>%
-  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant")) %>%
-  mutate(q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant")) %>%
   filter(term != "intercept") %>%
+  filter(indicator!="soc_stock_0_30cm") %>%
+  filter(indicator!="soc_stock_100cm") %>%
   select(-type) %>%
-  mutate(estimate = round(estimate, 3),
+  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant"),
+         q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant"),
+         estimate = round(estimate, 3),
          std.error = round(std.error, 3),
          statistic = round(statistic, 2),
          p.value = round(p.value, 3),
@@ -1141,7 +1269,9 @@ till_rma_report_table <- es_asp_rma_till %>%
          q_stat = round(q_stat, 1),
          q_pval = round(q_pval, 3),
          q_mod = round(q_mod, 1),
-         q_mod_pval = round(q_mod_pval, 2))
+         q_mod_pval = round(q_mod_pval, 2),
+         indicator = factor(indicator, levels=indicator_plotting_order)) %>%
+  arrange(indicator)
 flextable(till_rma_report_table)
 
 # Extract significant moderator variables
@@ -1174,20 +1304,23 @@ till_alk <- pluck(till_plots, 4)
 
 till_grid <- plot_grid(till_bd + theme(legend.position="none", 
                                    axis.title.x=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
-                     till_kssl + theme(legend.position="none", 
+                     till_kssl + theme(legend.position="none", axis.title.x=element_blank(),
                                      axis.title.y=element_blank(), axis.text.x=element_text(angle=45, hjust=1)), 
                      till_yod + theme(legend.position="none", 
                                       axis.title.x=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
-                     till_alk + theme(legend.position="none", 
+                     till_alk + theme(legend.position="none", axis.title.x=element_blank(),
                                       axis.title.y=element_blank(), axis.text.x=element_text(angle=45, hjust=1)),
                      align = 'vh',
                      labels = c("A", "B", "C", "D"),
                      hjust = -1,
                      nrow = 2)
 
+till_grid_label <- ggdraw(till_grid) +
+  draw_label("Tillage", color="black", vjust=0, y=0)
+
 till_leg <- get_legend(till_alk + theme(legend.box.margin = margin(0, 0, 0, 12)))
 
-plot_grid(till_grid, till_leg, rel_widths = c(3, .7))
+plot_grid(till_grid_label, till_leg, rel_widths = c(3, .7))
 ```
 
 Takeaways:
@@ -1218,11 +1351,13 @@ clay_rma_report_table <- es_asp_rma_clay %>%
   ungroup() %>%
   transmute(indicator, rma_tidy, report_df) %>%
   unnest(cols = c(rma_tidy, report_df)) %>%
-  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant")) %>%
-  mutate(q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant")) %>%
   filter(term != "intercept") %>%
+  filter(indicator!="soc_stock_0_30cm") %>%
+  filter(indicator!="soc_stock_100cm") %>%
   select(-term, -type) %>%
-  mutate(estimate = round(estimate, 3),
+  mutate(q_sig = ifelse(q_pval<0.05, "significant", "not significant"),
+         q_mod_sig = ifelse(q_mod_pval<0.05, "significant", "not significant"),
+         estimate = round(estimate, 3),
          std.error = round(std.error, 3),
          statistic = round(statistic, 2),
          p.value = round(p.value, 3),
@@ -1233,8 +1368,10 @@ clay_rma_report_table <- es_asp_rma_clay %>%
          q_stat = round(q_stat, 1),
          q_pval = round(q_pval, 3),
          q_mod = round(q_mod, 1),
-         q_mod_pval = round(q_mod_pval, 2))
+         q_mod_pval = round(q_mod_pval, 2),
+         indicator = factor(indicator, levels=indicator_plotting_order)) %>%
+  arrange(indicator)
 flextable(clay_rma_report_table)
 ```
 
-Too many studies are missing clay content information, as a result it is never a significant moderator variable.
+Clay content is missing from 7 studies, so even though the QM test is significant for bulk density, Yoder MWD, SOC%, and ACE, I don't trust reporting that information.

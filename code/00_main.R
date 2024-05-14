@@ -72,7 +72,7 @@ indicator_labs <- c("soc_pct" = "SOC %",
                     "pox_c" = "POX-C",
                     "tn_pct" = "Total N%",
                     "bulk_density" = "Bulk density",
-                    "soil_respiration" = "Respiration",
+                    "soil_respiration" = "Soil respiration",
                     "phosphodiesterase" = "Phosphodiesterase",
                     "alkaline_phosphatase" = "Alkaline phosphatase",
                     "acid_phosphatase" = "Acid phosphatase",
@@ -83,5 +83,11 @@ indicator_labs_df <- data.frame(indicator_labs) %>%
   rownames_to_column() %>%
   rename(indicator = rowname,
          label = indicator_labs)
+
+# Vector for indicator order for consistent plotting
+indicator_plotting_order <- c("bulk_density", "kssl_wsa", "yoder_agg_stab_mwd",
+                              "soc_pct", "ace", "pox_c",
+                              "soil_respiration","bglucosidase", "bglucosaminidase", 
+                              "acid_phosphatase", "alkaline_phosphatase", "arylsulfatase")
 
 # 3 - Run all the scripts :) ----

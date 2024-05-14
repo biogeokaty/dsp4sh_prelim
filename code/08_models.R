@@ -8,7 +8,7 @@ soc_df <- meta_df %>%
   mutate(across(where(is.character), as.factor)) %>%
   filter(!is.na(soc_stock_100cm)) # Filter out rows with no SOC stock data - they mess with the random forest model later on
 
-# 2 - Ctree and cforest to identify variables influencing SOC stocks ----
+# 2 - ARCHIVE - Ctree and cforest to identify variables influencing SOC stocks ----
 # Try a ctree - with land use variables and top 5 soil health metrics
 soc_tree <- ctree(soc_stock_100cm ~ soc_pct + ace + bglucosidase + yoder_agg_stab_mwd + kssl_wsa + bglucosaminidase +
                     label + lu + till + soil + mat + map + clay_tot_psa, data=soc_df)
@@ -35,10 +35,12 @@ soc_vip <- vip(soc_vi, geom="col")
 soc_vip
 
 # Most important variables for predicting SOC stocks to 100 cm are: soil, MAT, ACE, MAP, land use, clay content, label, and tillage
+# I'm not sure if the indicators (bglucosaminidase, bglucosidase, KSSL WSA, and Yoder agg stab) being less important is due to missing data for some of those measurements in some projects.
+# Overall, this tells us that between-project differences in SOC are much more evident than within-project differences. And, ACE is very closely related to overall SOC stocks!
 
 # I'm not sure if the indicators (bglucosaminidase, bglucosidase, KSSL WSA, and Yoder agg stab) being less important is due to missing data for some of those measurements in some projects
 
-# 3 - Linear models to predict SOC stocks based on top variables ----
+# 3 - ARCHIVE - Linear models to predict SOC stocks based on top variables ----
 stock_lm1 <- lm(soc_stock_100cm ~ soil + mat + ace + map + lu + clay_tot_psa + till, data=soc_df)
 summary(stock_lm1) # This is a decent model, R2 of 0.86, p<0.001
 
@@ -68,7 +70,7 @@ as.data.frame(partial_r2(stock_lm5))
 # Want to know if climate is a significant driver in other indicator values (it probably is)
 ind_long <- meta_df %>%
   select(project, dsp_pedon_id, soil, label, climate, mat, map, lu, till, clay_tot_psa, soc_stock_0_30cm, soc_stock_100cm, 
-         soc_pct:yoder_agg_stab_mwd, soil_respiration:ace) %>%
+         soc_pct, bulk_density, kssl_wsa:yoder_agg_stab_mwd, soil_respiration:acid_phosphatase, arylsulfatase:ace) %>%
   pivot_longer(soc_pct:ace, names_to="indicator", values_to="value")
 
 ## 4.1 - glmulti - all sites ----
@@ -126,7 +128,7 @@ var_fill <- c("mat" = "#35978f",
               "luRANGE" = "#8c510a")
 
 ggplot(multi_partials_2plot, aes(fill=var, 
-                                 y=partial_r2, x=fct_reorder(indicator, adj.r.squared))) + 
+                                 y=partial_r2, x=fct_relevel(indicator, rev(indicator_plotting_order)))) + 
   geom_bar(position="stack", stat="identity")+
   geom_text(aes(label = partial_r2), size=3, position=position_stack(vjust = 0.5)) +
   labs(x="Indicator", y=expression(Partial~R^2)) +
@@ -183,25 +185,24 @@ write_csv(multi_partials, here("figs", "indicator_partial_r2_ref.csv"))
 ## 4.4 - plot partial R2 - reference sites only ----
 multi_partials_2plot_ref <- multi_partials_ref %>%
   filter(partial_r2 > 0.1) %>%
-  mutate(var = factor(var, levels=c("luRANGE", "luGRASS", "luFOREST", "luORCHARD", "clay_tot_psa", "map", "mat")))
+  mutate(var = factor(var, levels=c("luRANGE", "luGRASS", "luFOREST", "clay_tot_psa", "map", "mat")))
 
 var_fill_ref <- c("mat" = "#35978f",
               "map" = "#80cdc1",
               "clay_tot_psa" = "#c7eae5",
-              "luORCHARD" = "#f6e8c3",
               "luFOREST" = "#dfc27d",
               "luGRASS" = "#bf812d",
               "luRANGE" = "#8c510a")
 
 ggplot(multi_partials_2plot_ref, aes(fill=var, 
-                    y=partial_r2, x=fct_reorder(indicator, adj.r.squared))) + 
+                    y=partial_r2, x=fct_relevel(indicator, rev(indicator_plotting_order)))) + 
   geom_bar(position="stack", stat="identity")+
   geom_text(aes(label = partial_r2), size=3, position=position_stack(vjust = 0.5)) +
   labs(x="Indicator", y=expression(Partial~R^2)) +
   scale_x_discrete(labels=indicator_labs) +
   scale_fill_manual(name="Predictor variable", 
                     values=var_fill_ref,
-                    labels=c("LU - Rangeland", "LU - Grass", "LU - Forest", "LU - Orchard",
+                    labels=c("LU - Rangeland", "LU - Grass", "LU - Forest",
                              "Soil Clay %", "MAP", "MAT"),
                     guide = guide_legend(reverse = TRUE),) +
   theme_katy() +
