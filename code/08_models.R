@@ -40,6 +40,17 @@ soc_vip
 
 # I'm not sure if the indicators (bglucosaminidase, bglucosidase, KSSL WSA, and Yoder agg stab) being less important is due to missing data for some of those measurements in some projects
 
+# can also try random forest with same predictors as glmulti...
+soc_conc_df <- meta_df %>%
+  mutate(across(where(is.character), as.factor)) %>%
+  filter(!is.na(soc_pct))
+
+soc_conc_forest <- cforest(soc_pct ~ lu + mat + map + clay_tot_psa, 
+                           data=soc_conc_df, ntree=1000)
+soc_conc_vi <- vi(soc_conc_forest)
+soc_conc_vip <- vip(soc_conc_vi, geom="col")
+soc_conc_vip
+
 # 3 - ARCHIVE - Linear models to predict SOC stocks based on top variables ----
 stock_lm1 <- lm(soc_stock_100cm ~ soil + mat + ace + map + lu + clay_tot_psa + till, data=soc_df)
 summary(stock_lm1) # This is a decent model, R2 of 0.86, p<0.001

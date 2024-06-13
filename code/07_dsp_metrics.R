@@ -5,6 +5,7 @@
 
 # 0 - Import data ----
 surf <- read.csv(here("data_processed","05_surface_horizons.csv"))
+project <- read.csv(here("data_processed", "05_project_data.csv"))
 
 # 1 - Boxplots of all indicators across soils and managements ----
 # 1.1 - Boxplots for each indicator (x axis is project) ----
@@ -35,9 +36,6 @@ surf_long %>%
   scale_fill_viridis(discrete=TRUE, name="Management") +
   theme_katy() +
   theme(axis.text.x = element_text(angle = 45, hjust=1))
-
-ggsave(here("figs/indicator_boxplots", "test.png"), 
-       width=10, height=7, units="in", dpi=400)
 
 # put into map function and iterate
 plot_list <- map(.x = indicators,
@@ -163,7 +161,10 @@ corr_matrix <- cor(indicators_normalized, use="pairwise.complete.obs")
 corr_pmat <- cor_pmat(indicators_normalized)
 ggcorrplot(corr_matrix, p.mat=corr_pmat, hc.order=TRUE, type="lower", lab=TRUE, insig="blank") +
   scale_x_discrete(labels=indicator_labs) +
-  scale_y_discrete(labels=indicator_labs)
+  scale_y_discrete(labels=indicator_labs) +
+  theme_katy() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1),
+        axis.title=element_blank())
 ggsave(here("figs", "surface_indicator_corrplot.png"), height=9, width=9, units="in", dpi=400)
 
 # Make a smaller version of correlation matrix for presentation
@@ -175,14 +176,16 @@ corr_matrix2 <- cor(indicators_red, use="pairwise.complete.obs")
 corr_pmat2 <- cor_pmat(indicators_red)
 ggcorrplot(corr_matrix2, p.mat=corr_pmat2, type="lower", lab=TRUE, insig="blank") +
   scale_x_discrete(labels=indicator_labs) +
-  scale_y_discrete(labels=indicator_labs)
+  scale_y_discrete(labels=indicator_labs) +
+  theme_katy() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1),
+        axis.title=element_blank())
 ggsave(here("figs", "surface_indicator_corrplot_reduced.png"), height=6, width=6, units="in", dpi=400)
 
 # 3 - PCA of indicators ----
 # Prcomp will not work with missing values - Can impute the missing values with missMDA package!!
 # prcomp is preferable to princomp because princomp uses a spectral decomposition approach (examines covariances between variables) and prcomp uses singular value decomposition, which examines covariances between individuals - supposed to have slightly better numerical accuracy
 nb <- estim_ncpPCA(indicators_only,method.cv = "Kfold", verbose = FALSE) # estimate the number of components from incomplete data
-nb$ncp
 res.comp <- imputePCA(indicators_only, ncp = nb$ncp)
 imp_ind <- res.comp$completeObs
 imp_pca <- prcomp(imp_ind, scale.=TRUE)

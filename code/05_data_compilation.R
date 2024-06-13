@@ -40,7 +40,7 @@ kssl <- db$kssllabmst %>%
   clean_names()
 
 clay <- kssl %>%
-  select(natural_key, clay_tot_psa) %>%
+  select(natural_key, clay_tot_psa, silt_tot_psa, sand_tot_psa, tex_psda) %>%
   rename(kssl_labsampnum = natural_key)
 
 # 3 - Attach climate data to pedon and horizon data ----

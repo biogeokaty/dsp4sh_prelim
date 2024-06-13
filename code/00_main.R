@@ -40,7 +40,7 @@ library(tidyverse)
 
 # 1 - ggplot theme function ----
 theme_katy <- function(base_size=14) {
-  theme_bw(base_size=base_size) %+replace%
+  theme_classic(base_size=base_size) %+replace%
     theme(# Legend
       legend.title=element_text(size=rel(1)), legend.text=element_text(size=rel(.8)),
       #axes                      
@@ -49,7 +49,7 @@ theme_katy <- function(base_size=14) {
 }
 
 theme_katy_grid <- function(base_size=14) {
-  theme_bw(base_size=base_size) %+replace%
+  theme_classic(base_size=base_size) %+replace%
     theme(# Legend
       legend.title=element_text(size=rel(1)), legend.text=element_text(size=rel(.8)),
       #axes                      
@@ -66,9 +66,9 @@ indicator_labs <- c("soc_pct" = "SOC %",
                     "bglucosaminidase" = "B-glucosaminidase (NAG)",
                     "ace" = "ACE protein",
                     "bglucosidase" = "B-glucosidase (BG)",
-                    "kssl_wsa" = "Aggregate stability (KSSL)",
-                    "yoder_agg_stab_mwd" = "Aggregate stability (Yoder MWD)",
-                    "arylsulfatase" = "Arylsulfatase",
+                    "kssl_wsa" = "Water-stable aggregates",
+                    "yoder_agg_stab_mwd" = "Aggregate mean weight diameter",
+                    "arylsulfatase" = "Arylsulfatase (AS)",
                     "pox_c" = "POX-C",
                     "tn_pct" = "Total N%",
                     "bulk_density" = "Bulk density",

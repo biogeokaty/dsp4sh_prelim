@@ -10,6 +10,11 @@ mean_sd <- list(
   sd = ~round(sd(.x, na.rm = TRUE), 2)
 )
 
+min_max <- list(
+  min = ~min(.x, na.rm=TRUE), 
+  max = ~max(.x, na.rm=TRUE)
+)
+
 # 1 - Calculate effect size for individual treatments and plot indicator effect sizes ----
 
 # Pivot data longer

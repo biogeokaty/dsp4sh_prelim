@@ -57,7 +57,7 @@ min_max <- list(
 
 # Custom ggplot themes
 theme_katy <- function(base_size=14) {
-  theme_bw(base_size=base_size) %+replace%
+  theme_classic(base_size=base_size) %+replace%
     theme(# Legend
       legend.title=element_text(size=rel(1)), legend.text=element_text(size=rel(.8)),
       #axes                      
@@ -66,7 +66,7 @@ theme_katy <- function(base_size=14) {
 }
 
 theme_katy_grid <- function(base_size=14) {
-  theme_bw(base_size=base_size) %+replace%
+  theme_classic(base_size=base_size) %+replace%
     theme(# Legend
       legend.title=element_text(size=rel(1)), legend.text=element_text(size=rel(.8)),
       #axes                      
@@ -83,9 +83,9 @@ indicator_labs <- c("soc_pct" = "SOC %",
                     "bglucosaminidase" = "B-glucosaminidase (NAG)",
                     "ace" = "ACE protein",
                     "bglucosidase" = "B-glucosidase (BG)",
-                    "kssl_wsa" = "Aggregate stability (KSSL)",
-                    "yoder_agg_stab_mwd" = "Aggregate stability (Yoder MWD)",
-                    "arylsulfatase" = "Arylsulfatase",
+                    "kssl_wsa" = "Water-stable aggregates",
+                    "yoder_agg_stab_mwd" = "Aggregate mean weight diameter",
+                    "arylsulfatase" = "Arylsulfatase (AS)",
                     "pox_c" = "POX-C",
                     "tn_pct" = "Total N%",
                     "bulk_density" = "Bulk density",
@@ -419,6 +419,7 @@ indicator_summary_wide <- surf_long %>%
   pivot_wider(names_from=indicator, values_from=summary)
 flextable(indicator_summary_wide)
 
+# table of mean indicator values in reference systems only
 indicator_summary_ref <- indicator_summary_wide %>%
   filter(label=="Ref")
 flextable(indicator_summary_ref)
@@ -431,6 +432,20 @@ indicator_summary_lu <- surf_long %>%
   unite("summary", value_mean:value_sd) %>%
   pivot_wider(names_from=indicator, values_from=summary)
 flextable(indicator_summary_lu)
+```
+
+Range in mean indicator values across projects (which indicators were the most variable?):
+
+```{r range in mean indicator values across projects}
+indicator_mean_range <- surf_long %>%
+  group_by(project, label, indicator) %>%
+  summarize(across(value, mean_sd)) %>%
+  na.omit() %>%
+  ungroup() %>%
+  group_by(indicator) %>%
+  summarize(across(value_mean, min_max)) %>%
+  mutate(fold = value_mean_max/value_mean_min)
+flextable(indicator_mean_range)
 ```
 
 ## Use a correlation matrix to look at the structure and covariance of the soil health metrics
@@ -451,7 +466,10 @@ corr_matrix <- cor(indicators_normalized, use="pairwise.complete.obs")
 corr_pmat <- cor_pmat(indicators_normalized)
 ggcorrplot(corr_matrix, p.mat=corr_pmat, hc.order=TRUE, type="lower", lab=TRUE, insig="blank") +
   scale_x_discrete(labels=indicator_labs) +
-  scale_y_discrete(labels=indicator_labs)
+  scale_y_discrete(labels=indicator_labs) +
+  theme_katy() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1),
+        axis.title=element_blank())
 
 # Plot a reduced version showing most significantly correlated variables
 indicators_red <- indicators_only %>%
@@ -462,7 +480,10 @@ corr_matrix2 <- cor(indicators_red, use="pairwise.complete.obs")
 corr_pmat2 <- cor_pmat(indicators_red)
 ggcorrplot(corr_matrix2, p.mat=corr_pmat2, type="lower", lab=TRUE, insig="blank") +
   scale_x_discrete(labels=indicator_labs) +
-  scale_y_discrete(labels=indicator_labs)
+  scale_y_discrete(labels=indicator_labs) +
+  theme_katy() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1),
+        axis.title=element_blank())
 ```
 
 Takeaways from correlation plot: 
