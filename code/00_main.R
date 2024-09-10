@@ -23,8 +23,6 @@ library(vip)
 library(leaps)
 library(sf)
 library(ggspatial)
-library(rnaturalearth)
-library(rnaturalearthdata)
 library(ggrepel)
 library(ggeasy)
 library(viridis)
@@ -38,7 +36,23 @@ library(glmulti)
 library(sensemakr)
 library(tidyverse)
 
-# 1 - ggplot theme function ----
+# 1 - Make list of summary functions - useful for generating summary tables ----
+mean_sd <- list(mean = ~round(mean(.x, na.rm = TRUE), 2), 
+                sd = ~round(sd(.x, na.rm = TRUE), 2)
+)
+
+mean_sd_cv <- list(
+  mean = ~round(mean(.x, na.rm = TRUE), 2), 
+  sd = ~round(sd(.x, na.rm = TRUE), 2),
+  cv = ~round(((sd(.x, na.rm=TRUE) / mean(.x, na.rm=TRUE))* 100), 2)
+)
+
+min_max <- list(
+  min = ~min(.x, na.rm=TRUE), 
+  max = ~max(.x, na.rm=TRUE)
+)
+
+# 2 - ggplot theme function ----
 theme_katy <- function(base_size=14) {
   theme_classic(base_size=base_size) %+replace%
     theme(# Legend
@@ -59,23 +73,23 @@ theme_katy_grid <- function(base_size=14) {
       plot.margin=unit(c(0.5, 0.5, 0.5, 0.5), "cm"))
 }
 
-# 2 - Make vector of indicator labels so they will print nicely ----
+# 3 - Make vector of indicator labels so they will print nicely ----
 indicator_labs <- c("soc_pct" = "SOC %",
                     "soc_stock_100cm" = "SOC stock (100 cm depth)",
                     "soc_stock_0_30cm" = "SOC stock (30 cm depth)",
-                    "bglucosaminidase" = "B-glucosaminidase (NAG)",
+                    "bglucosaminidase" = "NAG activity",
                     "ace" = "ACE protein",
-                    "bglucosidase" = "B-glucosidase (BG)",
-                    "kssl_wsa" = "Water-stable aggregates",
-                    "yoder_agg_stab_mwd" = "Aggregate mean weight diameter",
-                    "arylsulfatase" = "Arylsulfatase (AS)",
+                    "bglucosidase" = "BG activity",
+                    "kssl_wsa" = "Aggregate stability",
+                    "yoder_agg_stab_mwd" = "Aggregate MWD",
+                    "arylsulfatase" = "AS activity",
                     "pox_c" = "POX-C",
                     "tn_pct" = "Total N%",
                     "bulk_density" = "Bulk density",
-                    "soil_respiration" = "Soil respiration",
+                    "soil_respiration" = "Respiration",
                     "phosphodiesterase" = "Phosphodiesterase",
-                    "alkaline_phosphatase" = "Alkaline phosphatase",
-                    "acid_phosphatase" = "Acid phosphatase",
+                    "alkaline_phosphatase" = "AlkP activity",
+                    "acid_phosphatase" = "AcidP activity",
                     "p_h" = "pH")
 
 # Also make into dataframe (need this to use labels within map functions)
@@ -90,4 +104,4 @@ indicator_plotting_order <- c("bulk_density", "kssl_wsa", "yoder_agg_stab_mwd",
                               "soil_respiration","bglucosidase", "bglucosaminidase", 
                               "acid_phosphatase", "alkaline_phosphatase", "arylsulfatase")
 
-# 3 - Run all the scripts :) ----
+# 4 - Run all the scripts :) ----

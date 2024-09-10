@@ -96,23 +96,23 @@ surf_avg_clim <- surf %>%
   left_join(select(site_clim_sum, project, mat, map), by="project", suffix=c("_pedon", "_site"))
 
 # Plot - make one line plot that shows precipitation across sites, then plot on top of boxplots
-map_plot <- ggplot(surf_avg_clim, aes(x=fct_reorder(soil, map_site), y=map_site)) +
+map_plot <- ggplot(surf_avg_clim, aes(x=fct_reorder(project, map_site), y=map_site)) +
   geom_point(color="dodgerblue4") +
   geom_line(aes(group=1), color="dodgerblue2") +
-  labs(x="Soil", y="MAP (mm)") +
+  labs(x="Project", y="MAP (mm)") +
   theme_katy_grid() +
   easy_remove_x_axis() 
 
-poxc_box <- ggplot(surf_avg_clim, aes(x=fct_reorder(soil, map_site), y=pox_c, fill=label)) +
+poxc_box <- ggplot(surf_avg_clim, aes(x=fct_reorder(project, map_site), y=pox_c, fill=label)) +
   geom_boxplot() +
-  labs(x="Soil", y="POX-C") +
+  labs(x="Project", y=expression("POX-C"~(mg~kg^-1))) +
   scale_fill_viridis(discrete=TRUE, name="Management") +
   theme_katy_grid() +
   easy_remove_x_axis()
 
-bg_box <- ggplot(surf_avg_clim, aes(x=fct_reorder(soil, map_site), y=bglucosidase, fill=label)) +
+bg_box <- ggplot(surf_avg_clim, aes(x=fct_reorder(project, map_site), y=bglucosidase, fill=label)) +
   geom_boxplot() +
-  labs(x="Soil", y=expression(beta*"-glucosidase activity")) +
+  labs(x="Project", y=expression(beta*"-glucosidase activity"~(mg~kg^-1~hr-1))) +
   scale_fill_viridis(discrete=TRUE, name="Management") +
   theme_katy_grid() +
   theme(axis.text.x = element_text(angle = 45, hjust=1))
@@ -124,23 +124,30 @@ ind_grid <- plot_grid(map_plot,
 
 ind_leg <- get_legend(bg_box + theme(legend.box.margin = margin(0, 0, 0, 12)))
 
-ind_full <- plot_grid(ind_grid, ind_leg, rel_widths = c(3, .4))
+ind_full <- plot_grid(ind_grid, ind_leg, rel_widths = c(3, .5))
 ind_full
 ggsave(here("figs", "indicator_patt_precip.png"), width=11, height=9, units="in", dpi=400)
 
 # 1.4 - Table of mean indicator values in reference, SHM, and BAU systems ----
 indicator_summary_wide <- surf_long %>%
   group_by(project, label, indicator) %>%
-  summarize(across(value, mean_sd)) %>%
+  summarize(across(value, mean_sd_cv)) %>%
   na.omit() %>%
-  unite("summary", value_mean:value_sd) %>%
-  pivot_wider(names_from=indicator, values_from=summary)
+  unite("summary", value_mean:value_sd)  %>%
+  pivot_wider(names_from=indicator, values_from=summary:value_cv)
 
 write_csv(indicator_summary_wide, here("figs", "indicator_summary_wide.csv"))
 
 indicator_summary_ref <- indicator_summary_wide %>%
   filter(label=="Ref")
 write_csv(indicator_summary_ref, here("figs", "indicator_summary_ref.csv"))
+
+# Table of CV, calculated as the sd/mean across all sites/treatments
+indicator_cv_range <- surf_long %>%
+  group_by(indicator) %>%
+  summarize(across(value, mean_sd_cv)) %>%
+  na.omit()
+write_csv(indicator_cv_range, here("figs", "indicator_cv.csv"))
 
 # 1.5 - Table of mean indicator values by land use ----
 indicator_summary_lu <- surf_long %>%

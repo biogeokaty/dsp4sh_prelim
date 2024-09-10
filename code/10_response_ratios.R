@@ -203,7 +203,8 @@ rma_report_table <- es_asp_rma_nomod %>%
                                               i2 = .x$I2,
                                               h2 = .x$H2,
                                               q_stat = .x$QE,
-                                              q_pval = .x$QEp))) %>%
+                                              q_pval = .x$QEp,
+                                              k = .x$k))) %>%
   select(indicator, label, rma_tidy, report_df) %>%
   ungroup() %>%
   transmute(indicator, label, rma_tidy, report_df) %>%

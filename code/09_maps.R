@@ -139,7 +139,10 @@ write_csv(project_table, here("figs", "project_descriptions.csv"))
 
 # alternative version of project information that has details on each treatment- maybe for supplement?
 treatment_table <- meta_df %>%
-  select(project, label, lu, till, trt, explanation) %>%
+  select(project, label, lu, trt, explanation, dsp_plot_id) %>%
   distinct() %>%
+  group_by(project, label, lu, trt, explanation) %>%
+  count() %>%
+  rename("n_plots" = "n") %>%
   arrange(project)
 write_csv(treatment_table, here("figs", "project_treatment_table.csv"))

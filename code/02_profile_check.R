@@ -289,6 +289,9 @@ uconn_inv_hz <- horizons(uconn) %>%
   filter(dsp_pedon_id %in% uconn_invalid$dsp_pedon_id) # Lots of little gaps here - generally they all happen below the 10cm mark
 # This error appears to be in both the lab and the field raw data files - not sure if the data were recorded incorrectly or if there really are horizons missing. Will need to consult with Ekundayo. For now, exclude those profiles from analysis.
 
+# Save CSV to send to Ekundayo
+write_csv(uconn_inv_hz, here("data_processed", "uconn_missing_depths.csv"))
+
 uconn_valid <- horizons(uconn) %>%
   filter(!dsp_pedon_id %in% uconn_invalid$dsp_pedon_id)
 

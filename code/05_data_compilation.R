@@ -19,7 +19,7 @@ prism_clean <- prism %>%
 
 # Make dataframe of project overview with climate information from PRISM
 project_dat <- soc_pedon %>%
-  select(dsp_pedon_id, label_full, label, lu, till, trt, project, soil, site, pedon_x, pedon_y) %>%
+  select(dsp_pedon_id, dsp_plot_id, label_full, label, lu, till, trt, project, soil, site, pedon_x, pedon_y) %>%
   left_join(prism_clean, by=c("dsp_pedon_id", "pedon_x", "pedon_y")) %>%
   mutate(climate = ifelse(mat>15, ifelse(map>900, "warm_wet", "warm_dry"), ifelse(map>900, "cool_wet", "cool_dry"))) %>%
   group_by(soil) %>%

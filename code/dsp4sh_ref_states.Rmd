@@ -2,7 +2,10 @@
 title: "DSP4SH - Figures and Tables for Ref States Paper"
 author: "Katy Dynarski"
 date: "2024-4-12"
-output: html_document
+output:
+  pdf_document: default
+  word_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -39,7 +42,7 @@ mean_sd <- list(
 )
 
 theme_katy <- function(base_size=14) {
-  theme_bw(base_size=base_size) %+replace%
+  theme_classic(base_size=base_size) %+replace%
     theme(# Legend
       legend.title=element_text(size=rel(1)), legend.text=element_text(size=rel(.8)),
       #axes                      
@@ -48,7 +51,7 @@ theme_katy <- function(base_size=14) {
 }
 
 theme_katy_grid <- function(base_size=14) {
-  theme_bw(base_size=base_size) %+replace%
+  theme_classic(base_size=base_size) %+replace%
     theme(# Legend
       legend.title=element_text(size=rel(1)), legend.text=element_text(size=rel(.8)),
       #axes                      
@@ -87,7 +90,7 @@ soc_100_clean <- soc_pedon_filt %>%
 # Boxplot comparing total SOC stocks (100 cm) between treatments within soil types
 ggplot(soc_100_clean, aes(x=soil, y=soc_stock_100cm, fill=label)) +
   geom_boxplot() +
-  labs(x="Soil Series", y="SOC stock to 100 cm depth (Mg/ha)") +
+  labs(x="Soil", y="SOC stock to 100 cm depth (Mg/ha)") +
   scale_fill_viridis(discrete=TRUE, name="Management") +
   theme_katy() +
   theme(axis.text.x = element_text(angle = 45, hjust=1))
