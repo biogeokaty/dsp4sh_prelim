@@ -1,0 +1,192 @@
+dsp_pedon_id,soc_stock_30cm,soc_stock_100cm,dsp_plot_id,dspplotmgt_id,label_full,label,lu,till,trt,explanation,gen_state,site,project,soil
+ALT-1,123.4483576481335,163.7175072459925,ALT,1,SHM-no till,SHM,CROP,No-till,"No-till (cover crop, no-fertilizer). Soybean. Soybean","Western field, 50-acre section with grass waterway running south of field; bordered by hay",AG-CROP,Mower,UnivOfMinnesota,Marquis
+ALT-2,148.4126585757459,261.5199909615859,ALT,1,SHM-no till,SHM,CROP,No-till,"No-till (cover crop, no-fertilizer). Soybean. Soybean","Western field, 50-acre section with grass waterway running south of field; bordered by hay",AG-CROP,Mower,UnivOfMinnesota,Marquis
+ALT-3,92.1687251628563,148.97071391417032,ALT,1,SHM-no till,SHM,CROP,No-till,"No-till (cover crop, no-fertilizer). Soybean. Soybean","Western field, 50-acre section with grass waterway running south of field; bordered by hay",AG-CROP,Mower,UnivOfMinnesota,Marquis
+ALT-4,148.3933375925605,191.47084327406378,ALT,1,SHM-no till,SHM,CROP,No-till,"No-till (cover crop, no-fertilizer). Soybean. Soybean","Western field, 50-acre section with grass waterway running south of field; bordered by hay",AG-CROP,Mower,UnivOfMinnesota,Marquis
+ALT-5,197.3786592226755,239.60118888664311,ALT,1,SHM-no till,SHM,CROP,No-till,"No-till (cover crop, no-fertilizer). Soybean. Soybean","Western field, 50-acre section with grass waterway running south of field; bordered by hay",AG-CROP,Mower,UnivOfMinnesota,Marquis
+ALT-6,134.8959521812078,195.9031400433392,ALT,1,SHM-no till,SHM,CROP,No-till,"No-till (cover crop, no-fertilizer). Soybean. Soybean","Western field, 50-acre section with grass waterway running south of field; bordered by hay",AG-CROP,Mower,UnivOfMinnesota,Marquis
+ALT-7,165.6533910513961,219.9683815733797,ALT,1,SHM-no till,SHM,CROP,No-till,"No-till (cover crop, no-fertilizer). Soybean. Soybean","Western field, 50-acre section with grass waterway running south of field; bordered by hay",AG-CROP,Mower,UnivOfMinnesota,Marquis
+ALT-8,129.84561098844938,168.9756300807838,ALT,1,SHM-no till,SHM,CROP,No-till,"No-till (cover crop, no-fertilizer). Soybean. Soybean","Western field, 50-acre section with grass waterway running south of field; bordered by hay",AG-CROP,Mower,UnivOfMinnesota,Marquis
+ALT-9,150.8668511771504,243.9387368722032,ALT,1,SHM-no till,SHM,CROP,No-till,"No-till (cover crop, no-fertilizer). Soybean. Soybean","Western field, 50-acre section with grass waterway running south of field; bordered by hay",AG-CROP,Mower,UnivOfMinnesota,Marquis
+AR2-1,37.86636460995,NA,AR2,2,Ref - Reference,Ref,FOREST,Perennial,Reference,"Native treeline composed of mesquite, hackberry, anacua and others. No major disturbances in over 50 years.",Reference,UTRGV10,UTRGV,Hidalgo
+AR2-2,71.20026126455,NA,AR2,2,Ref - Reference,Ref,FOREST,Perennial,Reference,"Native treeline composed of mesquite, hackberry, anacua and others. No major disturbances in over 50 years.",Reference,UTRGV10,UTRGV,Hidalgo
+AR2-3,97.4863786082,NA,AR2,2,Ref - Reference,Ref,FOREST,Perennial,Reference,"Native treeline composed of mesquite, hackberry, anacua and others. No major disturbances in over 50 years.",Reference,UTRGV10,UTRGV,Hidalgo
+AR3-1,119.89706493385,NA,AR3,3,Ref - Reference,Ref,FOREST,Perennial,Reference,"Native treeline composed of mesquite, Texas ebony, and others. Undisturbed in landowner's memory (60+ year). Area catches sand deposited by strong winds.",Reference,UTRGV11,UTRGV,Hidalgo
+AR3-2,91.56810214664999,NA,AR3,3,Ref - Reference,Ref,FOREST,Perennial,Reference,"Native treeline composed of mesquite, Texas ebony, and others. Undisturbed in landowner's memory (60+ year). Area catches sand deposited by strong winds.",Reference,UTRGV11,UTRGV,Hidalgo
+AR3-3,140.89977950605,NA,AR3,3,Ref - Reference,Ref,FOREST,Perennial,Reference,"Native treeline composed of mesquite, Texas ebony, and others. Undisturbed in landowner's memory (60+ year). Area catches sand deposited by strong winds.",Reference,UTRGV11,UTRGV,Hidalgo
+ASP10-1,46.25691395348838,74.66571395348838,ASP10,4,SHM - no-till,SHM,CROP,No-till,ASP10,ASP,AG-CROP,JEA,WashingtonState,Palouse
+ASP10-2,38.131627906976746,61.45102790697675,ASP10,4,SHM - no-till,SHM,CROP,No-till,ASP10,ASP,AG-CROP,JEA,WashingtonState,Palouse
+ASP10-3,21.847637209302327,26.656337209302325,ASP10,4,SHM - no-till,SHM,CROP,No-till,ASP10,ASP,AG-CROP,JEA,WashingtonState,Palouse
+ASP2-1,131.620446,183.80327515,ASP2,5,SHM - no-till,SHM,CROP,No-till,ASP2,ASP,AG-CROP,CK,WashingtonState,Palouse
+ASP2-2,50.670959,115.48901900000001,ASP2,5,SHM - no-till,SHM,CROP,No-till,ASP2,ASP,AG-CROP,CK,WashingtonState,Palouse
+ASP2-3,98.61762499999999,176.598318875,ASP2,5,SHM - no-till,SHM,CROP,No-till,ASP2,ASP,AG-CROP,CK,WashingtonState,Palouse
+ASP6-1,68.49199999999999,93.26899999999999,ASP6,6,SHM - no-till,SHM,CROP,No-till,ASP6,ASP,AG-CROP,KU,WashingtonState,Palouse
+ASP6-2,54.09,101.735,ASP6,6,SHM - no-till,SHM,CROP,No-till,ASP6,ASP,AG-CROP,KU,WashingtonState,Palouse
+ASP6-3,98.0489,143.9228,ASP6,6,SHM - no-till,SHM,CROP,No-till,ASP6,ASP,AG-CROP,KU,WashingtonState,Palouse
+ASP9-1,54.139695,185.597135,ASP9,7,SHM - no-till,SHM,CROP,No-till,ASP9,ASP,AG-CROP,PCF,WashingtonState,Palouse
+ASP9-2,58.405331999999994,144.376131,ASP9,7,SHM - no-till,SHM,CROP,No-till,ASP9,ASP,AG-CROP,PCF,WashingtonState,Palouse
+ASP9-3,65.8435316,91.35774280000001,ASP9,7,SHM - no-till,SHM,CROP,No-till,ASP9,ASP,AG-CROP,PCF,WashingtonState,Palouse
+AX1-1,53.43225237425,NA,AX1,8,BAU - Conventional Till,BAU,CROP,Till,Conventional Till,"Conventional tillage with a sorghum, sesame, cotton rotation",AG-CROP,UTRGV1,UTRGV,Hidalgo
+AX1-2,104.70758912710001,NA,AX1,8,BAU - Conventional Till,BAU,CROP,Till,Conventional Till,"Conventional tillage with a sorghum, sesame, cotton rotation",AG-CROP,UTRGV1,UTRGV,Hidalgo
+AX1-3,75.13604887955,NA,AX1,8,BAU - Conventional Till,BAU,CROP,Till,Conventional Till,"Conventional tillage with a sorghum, sesame, cotton rotation",AG-CROP,UTRGV1,UTRGV,Hidalgo
+AX2-1,56.35990597475,NA,AX2,9,BAU - Conventional Till,BAU,CROP,Till,Conventional Till,"Conventional tillage with a cotton, sorghum rotation",AG-CROP,UTRGV2,UTRGV,Hidalgo
+AX2-2,54.70668104765,NA,AX2,9,BAU - Conventional Till,BAU,CROP,Till,Conventional Till,"Conventional tillage with a cotton, sorghum rotation",AG-CROP,UTRGV2,UTRGV,Hidalgo
+AX2-3,83.78510242784999,NA,AX2,9,BAU - Conventional Till,BAU,CROP,Till,Conventional Till,"Conventional tillage with a cotton, sorghum rotation",AG-CROP,UTRGV2,UTRGV,Hidalgo
+AX3-1,77.02132320505,NA,AX3,10,BAU - Conventional Till,BAU,CROP,Till,Conventional Till,"Conventional tillage with a cotton, corn, and sorghum rotation",AG-CROP,UTRGV3,UTRGV,Hidalgo
+AX3-2,97.6561192006,NA,AX3,10,BAU - Conventional Till,BAU,CROP,Till,Conventional Till,"Conventional tillage with a cotton, corn, and sorghum rotation",AG-CROP,UTRGV3,UTRGV,Hidalgo
+AX3-3,59.149796540400004,NA,AX3,10,BAU - Conventional Till,BAU,CROP,Till,Conventional Till,"Conventional tillage with a cotton, corn, and sorghum rotation",AG-CROP,UTRGV3,UTRGV,Hidalgo
+AY1-1,43.03985897439999,NA,AY1,11,BAU - Intermittent Till,BAU,CROP,Till,Intermittent Till,"Strip tillage for 2 years, followed by return to conventional till for herbicide resistant weed management. Sorghum/cotton rotation.",AG-CROP,UTRGV4,UTRGV,Hidalgo
+AY1-2,20.85691461685,NA,AY1,11,BAU - Intermittent Till,BAU,CROP,Till,Intermittent Till,"Strip tillage for 2 years, followed by return to conventional till for herbicide resistant weed management. Sorghum/cotton rotation.",AG-CROP,UTRGV4,UTRGV,Hidalgo
+AY1-3,48.40432484875,NA,AY1,11,BAU - Intermittent Till,BAU,CROP,Till,Intermittent Till,"Strip tillage for 2 years, followed by return to conventional till for herbicide resistant weed management. Sorghum/cotton rotation.",AG-CROP,UTRGV4,UTRGV,Hidalgo
+AY2-1,42.24440818495,NA,AY2,12,BAU - Intermittent Till,BAU,CROP,Till,Intermittent Till,"Strip tillage for 3 years, followed by return to conventional till for herbicide resistant weed management. Sorghum/cotton rotation.",AG-CROP,UTRGV5,UTRGV,Hidalgo
+AY2-2,46.540247467899995,NA,AY2,12,BAU - Intermittent Till,BAU,CROP,Till,Intermittent Till,"Strip tillage for 3 years, followed by return to conventional till for herbicide resistant weed management. Sorghum/cotton rotation.",AG-CROP,UTRGV5,UTRGV,Hidalgo
+AY2-3,46.32274701065,NA,AY2,12,BAU - Intermittent Till,BAU,CROP,Till,Intermittent Till,"Strip tillage for 3 years, followed by return to conventional till for herbicide resistant weed management. Sorghum/cotton rotation.",AG-CROP,UTRGV5,UTRGV,Hidalgo
+AY3-1,51.79236229525,NA,AY3,13,BAU - Intermittent Till,BAU,CROP,Till,Intermittent Till,"Strip tillage for 2 years, followed by return to conventional till for herbicide resistant weed management. Sorghum/cotton rotation.",AG-CROP,UTRGV6,UTRGV,Hidalgo
+AY3-2,56.2664792188,NA,AY3,13,BAU - Intermittent Till,BAU,CROP,Till,Intermittent Till,"Strip tillage for 2 years, followed by return to conventional till for herbicide resistant weed management. Sorghum/cotton rotation.",AG-CROP,UTRGV6,UTRGV,Hidalgo
+AY3-3,60.3876926694,NA,AY3,13,BAU - Intermittent Till,BAU,CROP,Till,Intermittent Till,"Strip tillage for 2 years, followed by return to conventional till for herbicide resistant weed management. Sorghum/cotton rotation.",AG-CROP,UTRGV6,UTRGV,Hidalgo
+AZ1-1,61.8286860443,NA,AZ1,14,BAU - Strip Till,BAU,CROP,Till,Strip Till,Strip tillage for 4 years with a cotton/sorghum rotation.,AG-CROP,UTRGV7,UTRGV,Hidalgo
+AZ1-2,52.87059914875,NA,AZ1,14,BAU - Strip Till,BAU,CROP,Till,Strip Till,Strip tillage for 4 years with a cotton/sorghum rotation.,AG-CROP,UTRGV7,UTRGV,Hidalgo
+AZ1-3,45.2323455958,NA,AZ1,14,BAU - Strip Till,BAU,CROP,Till,Strip Till,Strip tillage for 4 years with a cotton/sorghum rotation.,AG-CROP,UTRGV7,UTRGV,Hidalgo
+AZ2-1,29.676456593,NA,AZ2,15,BAU - Strip Till,BAU,CROP,Till,Strip Till,Strip tillage for 3 years with a cotton/sorghum rotation.,AG-CROP,UTRGV8,UTRGV,Hidalgo
+AZ2-2,29.048444585450003,NA,AZ2,15,BAU - Strip Till,BAU,CROP,Till,Strip Till,Strip tillage for 3 years with a cotton/sorghum rotation.,AG-CROP,UTRGV8,UTRGV,Hidalgo
+AZ2-3,43.81382147275,NA,AZ2,15,BAU - Strip Till,BAU,CROP,Till,Strip Till,Strip tillage for 3 years with a cotton/sorghum rotation.,AG-CROP,UTRGV8,UTRGV,Hidalgo
+AZ3-1,34.897414607900004,NA,AZ3,16,BAU - Strip Till,BAU,CROP,Till,Strip Till,"Strip tillage for 6 years with a cotton/sorghum rotation, Sunn hemp cover crop 1 year before sampling.",AG-CROP,UTRGV9,UTRGV,Hidalgo
+AZ3-2,31.359774870249996,NA,AZ3,16,BAU - Strip Till,BAU,CROP,Till,Strip Till,"Strip tillage for 6 years with a cotton/sorghum rotation, Sunn hemp cover crop 1 year before sampling.",AG-CROP,UTRGV9,UTRGV,Hidalgo
+AZ3-3,38.64680516429999,NA,AZ3,16,BAU - Strip Till,BAU,CROP,Till,Strip Till,"Strip tillage for 6 years with a cotton/sorghum rotation, Sunn hemp cover crop 1 year before sampling.",AG-CROP,UTRGV9,UTRGV,Hidalgo
+BAU3-1,37.4092,69.7324,BAU3,17,BAU,BAU,CROP,Till,BAU3,BAU,AG-CROP,KU,WashingtonState,Palouse
+BAU3-2,34.0403,74.1475,BAU3,17,BAU,BAU,CROP,Till,BAU3,BAU,AG-CROP,KU,WashingtonState,Palouse
+BAU3-3,31.732,60.981100000000005,BAU3,17,BAU,BAU,CROP,Till,BAU3,BAU,AG-CROP,KU,WashingtonState,Palouse
+BAU8-1,144.09200444444443,190.86950444444443,BAU8,18,BAU,BAU,CROP,Till,BAU8,BAU,AG-CROP,LYM,WashingtonState,Palouse
+BAU8-2,101.47709703703703,227.65233903703702,BAU8,18,BAU,BAU,CROP,Till,BAU8,BAU,AG-CROP,LYM,WashingtonState,Palouse
+BAU8-3,125.47024044444444,192.749944765873,BAU8,18,BAU,BAU,CROP,Till,BAU8,BAU,AG-CROP,LYM,WashingtonState,Palouse
+BAU9-1,46.177931,113.02985419999999,BAU9,19,BAU,BAU,CROP,Till,BAU9,BAU,AG-CROP,CK,WashingtonState,Palouse
+BAU9-2,46.146452,97.36772500000001,BAU9,19,BAU,BAU,CROP,Till,BAU9,BAU,AG-CROP,CK,WashingtonState,Palouse
+BAU9-3,41.46541481481482,100.30190270740741,BAU9,19,BAU,BAU,CROP,Till,BAU9,BAU,AG-CROP,CK,WashingtonState,Palouse
+CON-1,119.2355094252552,155.00195609674319,CON,27,BAU,BAU,CROP,Till,conventional tillage (10cm tillage in Spring; 30cm tillage in fall). Soybean,"Eastern field, 150-acre section with grass waterway running from middle of W border to north-center of section",AG-CROP,Mower,UnivOfMinnesota,Readlyn
+CON-2,107.64705871335809,196.1517218889949,CON,27,BAU,BAU,CROP,Till,conventional tillage (10cm tillage in Spring; 30cm tillage in fall). Soybean,"Eastern field, 150-acre section with grass waterway running from middle of W border to north-center of section",AG-CROP,Mower,UnivOfMinnesota,Readlyn
+CON-3,84.326701506189,127.296715411591,CON,27,BAU,BAU,CROP,Till,conventional tillage (10cm tillage in Spring; 30cm tillage in fall). Soybean,"Eastern field, 150-acre section with grass waterway running from middle of W border to north-center of section",AG-CROP,Mower,UnivOfMinnesota,Readlyn
+CON-4,120.120798412112,152.902097054204,CON,27,BAU,BAU,CROP,Till,conventional tillage (10cm tillage in Spring; 30cm tillage in fall). Soybean,"Eastern field, 150-acre section with grass waterway running from middle of W border to north-center of section",AG-CROP,Mower,UnivOfMinnesota,Readlyn
+CON-5,118.65666750969629,149.6954715974853,CON,27,BAU,BAU,CROP,Till,conventional tillage (10cm tillage in Spring; 30cm tillage in fall). Soybean,"Eastern field, 150-acre section with grass waterway running from middle of W border to north-center of section",AG-CROP,Mower,UnivOfMinnesota,Readlyn
+CON-6,109.2417970981433,158.13412236462293,CON,27,BAU,BAU,CROP,Till,conventional tillage (10cm tillage in Spring; 30cm tillage in fall). Soybean,"Eastern field, 150-acre section with grass waterway running from middle of W border to north-center of section",AG-CROP,Mower,UnivOfMinnesota,Readlyn
+CON-7,87.25493540766661,175.32726267416712,CON,27,BAU,BAU,CROP,Till,conventional tillage (10cm tillage in Spring; 30cm tillage in fall). Soybean,"Eastern field, 150-acre section with grass waterway running from middle of W border to north-center of section",AG-CROP,Mower,UnivOfMinnesota,Readlyn
+CON-8,90.10971263787769,260.81666013753306,CON,27,BAU,BAU,CROP,Till,conventional tillage (10cm tillage in Spring; 30cm tillage in fall). Soybean,"Eastern field, 150-acre section with grass waterway running from middle of W border to north-center of section",AG-CROP,Mower,UnivOfMinnesota,Readlyn
+CON-9,134.75952633368098,178.739196371661,CON,27,BAU,BAU,CROP,Till,conventional tillage (10cm tillage in Spring; 30cm tillage in fall). Soybean,"Eastern field, 150-acre section with grass waterway running from middle of W border to north-center of section",AG-CROP,Mower,UnivOfMinnesota,Readlyn
+CVT - 1 - 1,7.772500000000001,21.332,CVT - 1,28,BAU,BAU,CROP,Till,Conv Till - 1,CT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+CVT - 1 - 2,7.009500000000001,25.308,CVT - 1,28,BAU,BAU,CROP,Till,Conv Till - 1,CT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+CVT - 1 - 3,9.464500000000001,24.3145,CVT - 1,28,BAU,BAU,CROP,Till,Conv Till - 1,CT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+CVT - 2 - 1,10.011,26.194499999999998,CVT - 2,29,BAU,BAU,CROP,Till,Conv Till - 2,CT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+CVT - 2 - 2,8.099,21.9975,CVT - 2,29,BAU,BAU,CROP,Till,Conv Till - 2,CT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+CVT - 2 - 3,8.914,28.0345,CVT - 2,29,BAU,BAU,CROP,Till,Conv Till - 2,CT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+CVT - 3 - 1,10.988,22.177999999999997,CVT - 3,30,BAU,BAU,CROP,Till,Conv Till - 3,CT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+CVT - 3 - 2,11.971499999999999,29.463499999999996,CVT - 3,30,BAU,BAU,CROP,Till,Conv Till - 3,CT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+CVT - 3 - 3,10.3885,28.084,CVT - 3,30,BAU,BAU,CROP,Till,Conv Till - 3,CT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+CeC1-1,74.34275329357,105.02529803361,CeC1,20,BAU,BAU,CROP,Till,wheat - 1,corn,AG-CROP,Lake Wheeler,NCState,Cecil
+CeC1-2,54.63483346402,64.9650078622,CeC1,20,BAU,BAU,CROP,Till,wheat - 1,corn,AG-CROP,Lake Wheeler,NCState,Cecil
+CeC1-3,62.89246156711,74.00860673521,CeC1,20,BAU,BAU,CROP,Till,wheat - 1,corn,AG-CROP,Lake Wheeler,NCState,Cecil
+CeC2-1,69.45844755589,103.48586897509,CeC2,21,BAU,BAU,CROP,Till,wheat - 2,corn,AG-CROP,Lake Wheeler,NCState,Cecil
+CeC2-2,60.08260500589999,87.21865740794,CeC2,21,BAU,BAU,CROP,Till,wheat - 2,corn,AG-CROP,Lake Wheeler,NCState,Cecil
+CeC2-3,75.12760846965,83.71676966799,CeC2,21,BAU,BAU,CROP,Till,wheat - 2,corn,AG-CROP,Lake Wheeler,NCState,Cecil
+CeC3-1,122.34704903778001,177.51019232715,CeC3,22,BAU,BAU,CROP,Till,wheat - 3,corn,AG-CROP,Lake Wheeler,NCState,Cecil
+CeC3-2,132.60002145286,NA,CeC3,22,BAU,BAU,CROP,Till,wheat - 3,corn,AG-CROP,Lake Wheeler,NCState,Cecil
+CeC3-3,138.5914635771,198.52800737914998,CeC3,22,BAU,BAU,CROP,Till,wheat - 3,corn,AG-CROP,Lake Wheeler,NCState,Cecil
+CeF3-1,51.02217661534999,64.32087263314999,CeF3,23,Ref - Forest,Ref,FOREST,Perennial,forest,forest,Reference,Lake Wheeler,NCState,Cecil
+CeF3-2,55.235556664099995,76.09243301209999,CeF3,23,Ref - Forest,Ref,FOREST,Perennial,forest,forest,Reference,Lake Wheeler,NCState,Cecil
+CeH1-1,48.02648163543999,72.65563874845999,CeH1,24,SHM - forage,SHM,FORAGE,Perennial,hay 1,hay,AG-FORAGE,Lake Wheeler,NCState,Cecil
+CeH1-2,90.68126748624,107.17048353804,CeH1,24,SHM - forage,SHM,FORAGE,Perennial,hay 1,hay,AG-FORAGE,Lake Wheeler,NCState,Cecil
+CeH1-3,112.55846861605,126.60816315181,CeH1,24,SHM - forage,SHM,FORAGE,Perennial,hay 1,hay,AG-FORAGE,Lake Wheeler,NCState,Cecil
+CeH2-1,49.5608550941,82.87070971475,CeH2,25,SHM - forage,SHM,FORAGE,Perennial,hay 2,hay,AG-FORAGE,Lake Wheeler,NCState,Cecil
+CeH2-2,67.860337759675,86.357656286635,CeH2,25,SHM - forage,SHM,FORAGE,Perennial,hay 2,hay,AG-FORAGE,Lake Wheeler,NCState,Cecil
+CeH2-3,91.40998372642,102.23147216001999,CeH2,25,SHM - forage,SHM,FORAGE,Perennial,hay 2,hay,AG-FORAGE,Lake Wheeler,NCState,Cecil
+CeH3-1,98.155963709775,NA,CeH3,26,SHM - forage,SHM,FORAGE,Perennial,hay 3,hay,AG-FORAGE,Lake Wheeler,NCState,Cecil
+CeH3-2,44.98351287932,NA,CeH3,26,SHM - forage,SHM,FORAGE,Perennial,hay 3,hay,AG-FORAGE,Lake Wheeler,NCState,Cecil
+CeH3-3,52.61298635957,70.99943846837,CeH3,26,SHM - forage,SHM,FORAGE,Perennial,hay 3,hay,AG-FORAGE,Lake Wheeler,NCState,Cecil
+IL-019-SW-ARBRTM-001,123.5963896338173,194.7592595456873,IL-019-SW-ARBRTM,31,Ref - Ref,Ref,FOREST,Perennial,Ref,Restored since 1990,Reference,Arboretum,Illinois,Drummer
+IL-019-SW-ARBRTM-002,127.633380329148,201.967941161242,IL-019-SW-ARBRTM,31,Ref - Ref,Ref,FOREST,Perennial,Ref,Restored since 1990,Reference,Arboretum,Illinois,Drummer
+IL-019-SW-ARBRTM-003,107.685057717326,195.252135519095,IL-019-SW-ARBRTM,31,Ref - Ref,Ref,FOREST,Perennial,Ref,Restored since 1990,Reference,Arboretum,Illinois,Drummer
+IL-019-SW-RTHRML-001,85.09009133592338,144.14519092382235,IL-019-SW-RTHRML,32,SHM - NT,SHM,CROP,No-till,NT,No-Till managed with corn-soybean rotations,AG-CROP,Rothermel,Illinois,Drummer
+IL-019-SW-RTHRML-002,82.30804235537593,314.97192212149093,IL-019-SW-RTHRML,32,SHM - NT,SHM,CROP,No-till,NT,No-Till managed with corn-soybean rotations,AG-CROP,Rothermel,Illinois,Drummer
+IL-019-SW-RTHRML-003,135.4601988429834,215.8383719344034,IL-019-SW-RTHRML,32,SHM - NT,SHM,CROP,No-till,NT,No-Till managed with corn-soybean rotations,AG-CROP,Rothermel,Illinois,Drummer
+IL-019-SW-RTHRML-004,81.06999439476117,139.97159603813216,IL-019-SW-RTHRML,32,SHM - NT,SHM,CROP,No-till,NT,No-Till managed with corn-soybean rotations,AG-CROP,Rothermel,Illinois,Drummer
+IL-115-SW-ETAL-001,97.59285424262751,207.9891678686815,IL-115-SW-ETAL,33,BAU - Organic,BAU,CROP,Till,Organic,Organically managed in a corn-soybean-small grains rotation with cover crops established prior to corn,AG-CROP,Etal,Illinois,Drummer
+IL-115-SW-ETAL-002,77.95596951843599,158.083200108906,IL-115-SW-ETAL,33,BAU - Organic,BAU,CROP,Till,Organic,Organically managed in a corn-soybean-small grains rotation with cover crops established prior to corn,AG-CROP,Etal,Illinois,Drummer
+IL-115-SW-ETAL-003,87.0048923158495,155.9304502709785,IL-115-SW-ETAL,33,BAU - Organic,BAU,CROP,Till,Organic,Organically managed in a corn-soybean-small grains rotation with cover crops established prior to corn,AG-CROP,Etal,Illinois,Drummer
+IL-115-SW-WDFLD-001,97.885057721973,171.239713308599,IL-115-SW-WDFLD,34,BAU - Organic,BAU,CROP,Till,Organic,Organically managed in a corn-soybean-small grains rotation with cover crops established prior to corn,AG-CROP,Woodfield,Illinois,Drummer
+IL-115-SW-WDFLD-002,100.39037066019,184.520203114737,IL-115-SW-WDFLD,34,BAU - Organic,BAU,CROP,Till,Organic,Organically managed in a corn-soybean-small grains rotation with cover crops established prior to corn,AG-CROP,Woodfield,Illinois,Drummer
+IL-115-SW-WDFLD-003,98.081461441465,179.647506001785,IL-115-SW-WDFLD,34,BAU - Organic,BAU,CROP,Till,Organic,Organically managed in a corn-soybean-small grains rotation with cover crops established prior to corn,AG-CROP,Woodfield,Illinois,Drummer
+IL-147-SW-CRP-001,109.08066184654498,196.63260837109098,IL-147-SW-CRP,35,BAU - Conventional,BAU,CROP,Till,Conventional,Conventionally managed field in a corn-soybean rotation with cover crops established prior to corn,AG-CROP,Cripe,Illinois,Drummer
+IL-147-SW-CRP-002,80.62378819226599,172.630924713675,IL-147-SW-CRP,35,BAU - Conventional,BAU,CROP,Till,Conventional,Conventionally managed field in a corn-soybean rotation with cover crops established prior to corn,AG-CROP,Cripe,Illinois,Drummer
+IL-147-SW-CRP-003,72.7022529126295,125.7629007393295,IL-147-SW-CRP,35,BAU - Conventional,BAU,CROP,Till,Conventional,Conventionally managed field in a corn-soybean rotation with cover crops established prior to corn,AG-CROP,Cripe,Illinois,Drummer
+IL-147-SW-TS-001,92.6546082119085,146.4329057544395,IL-147-SW-TS,36,BAU - Conventional,BAU,CROP,Till,Conventional,Conventionally managed field in a corn-soybean rotation with cover crops established prior to corn,AG-CROP,Taylor South,Illinois,Drummer
+IL-147-SW-TS-002,105.0989159391545,176.3584409926965,IL-147-SW-TS,36,BAU - Conventional,BAU,CROP,Till,Conventional,Conventionally managed field in a corn-soybean rotation with cover crops established prior to corn,AG-CROP,Taylor South,Illinois,Drummer
+IL-147-SW-TS-003,110.7667681221695,187.9295877771535,IL-147-SW-TS,36,BAU - Conventional,BAU,CROP,Till,Conventional,Conventionally managed field in a corn-soybean rotation with cover crops established prior to corn,AG-CROP,Taylor South,Illinois,Drummer
+KeC1 - 1,71.03789399579,129.15733183804,KeC1,46,BAU,BAU,CROP,Till,Till with rotation (eco-fallow),"Eco-Fallow Rotation.  Summer fallow is reg tillage, driled to wheat, spray stubble after harvest.  No-till corn, then fallow. (Fallow is the tillage part and wheat stubble is cleaned) No disc, just a sweep plow",AG-CROP,NA,KansasState,Keith
+KeC1 - 2,58.0951458729,107.30294183739,KeC1,46,BAU,BAU,CROP,Till,Till with rotation (eco-fallow),"Eco-Fallow Rotation.  Summer fallow is reg tillage, driled to wheat, spray stubble after harvest.  No-till corn, then fallow. (Fallow is the tillage part and wheat stubble is cleaned) No disc, just a sweep plow",AG-CROP,NA,KansasState,Keith
+KeC1 - 3,60.23577627476,112.03400450690667,KeC1,46,BAU,BAU,CROP,Till,Till with rotation (eco-fallow),"Eco-Fallow Rotation.  Summer fallow is reg tillage, driled to wheat, spray stubble after harvest.  No-till corn, then fallow. (Fallow is the tillage part and wheat stubble is cleaned) No disc, just a sweep plow",AG-CROP,NA,KansasState,Keith
+KeC2 - 1,58.93659485015,118.77554397277001,KeC2,47,BAU,BAU,CROP,Till,Tilled once every 3 years.  Sorghum/wheat/corn,"Tilled once every 3 years.  Sorghum '15, tilled summer 2016, wheat '16, corn '18",AG-CROP,NA,KansasState,Keith
+KeC2 - 2,71.33496624515,130.57979275119,KeC2,47,BAU,BAU,CROP,Till,Tilled once every 3 years.  Sorghum/wheat/corn,"Tilled once every 3 years.  Sorghum '15, tilled summer 2016, wheat '16, corn '18",AG-CROP,NA,KansasState,Keith
+KeC2 - 3,65.13205343866,150.855402585,KeC2,47,BAU,BAU,CROP,Till,Tilled once every 3 years.  Sorghum/wheat/corn,"Tilled once every 3 years.  Sorghum '15, tilled summer 2016, wheat '16, corn '18",AG-CROP,NA,KansasState,Keith
+KeC3 - 1,82.04965045664,124.13626239698,KeC3,48,BAU,BAU,CROP,Till,Till converting to no-till,"Conventional tillage estimated at every two years until 2018, 2018 was first year of no-till.  Recently purchased fields.""Tillage Until 2018""<a0>",AG-CROP,NA,KansasState,Keith
+KeC3 - 2,41.22043251792,87.39510964042,KeC3,48,BAU,BAU,CROP,Till,Till converting to no-till,"Conventional tillage estimated at every two years until 2018, 2018 was first year of no-till.  Recently purchased fields.""Tillage Until 2018""<a0>",AG-CROP,NA,KansasState,Keith
+KeC3 - 3,53.05307308935,86.39488595691,KeC3,48,BAU,BAU,CROP,Till,Till converting to no-till,"Conventional tillage estimated at every two years until 2018, 2018 was first year of no-till.  Recently purchased fields.""Tillage Until 2018""<a0>",AG-CROP,NA,KansasState,Keith
+KeCF1 - 1,48.38467556932,90.92906380864,KeCF1,49,SHM - no-till,SHM,CROP,No-till,"No-Till  with cover crop -  corn, oats, or wheat.","No-Till since 2001 with cover cropping.  Cover cropped every three years since 2006.  Typically planted to corn, oats, or wheat.",AG-CROP,NA,KansasState,Keith
+KeCF1 - 2,40.3585063761,79.19060938626001,KeCF1,49,SHM - no-till,SHM,CROP,No-till,"No-Till  with cover crop -  corn, oats, or wheat.","No-Till since 2001 with cover cropping.  Cover cropped every three years since 2006.  Typically planted to corn, oats, or wheat.",AG-CROP,NA,KansasState,Keith
+KeCF1 - 3,57.82338033152,95.91536780399,KeCF1,49,SHM - no-till,SHM,CROP,No-till,"No-Till  with cover crop -  corn, oats, or wheat.","No-Till since 2001 with cover cropping.  Cover cropped every three years since 2006.  Typically planted to corn, oats, or wheat.",AG-CROP,NA,KansasState,Keith
+KeCF3 - 1,52.107352850619996,87.78119399578,KeCF3,50,SHM - no-till,SHM,CROP,No-till,No-till - diverse rotation,"20 years+ of No-till with 100% residue post-harvest. Covercropping is not typical of the area due to high water holding capacities of the soils paired with low and highly variable annual precipitation.  He has found covercropping to be less efficient at recharging the soil profile than fallow, and has documented yield losses from cover cropping.  Kastens has done covercropping research since 2010, spending over $50,000 to reach this conclusion, thought they still do some small trials currently.  The crop rotation is diverse as it includes a winter grass, summer grass, and legume.  Wheat, corn, yellow peas represent a typical crop rotation.",AG-CROP,NA,KansasState,Keith
+KeCF3 - 2,42.73113818237,95.30828176147,KeCF3,50,SHM - no-till,SHM,CROP,No-till,No-till - diverse rotation,"20 years+ of No-till with 100% residue post-harvest. Covercropping is not typical of the area due to high water holding capacities of the soils paired with low and highly variable annual precipitation.  He has found covercropping to be less efficient at recharging the soil profile than fallow, and has documented yield losses from cover cropping.  Kastens has done covercropping research since 2010, spending over $50,000 to reach this conclusion, thought they still do some small trials currently.  The crop rotation is diverse as it includes a winter grass, summer grass, and legume.  Wheat, corn, yellow peas represent a typical crop rotation.",AG-CROP,NA,KansasState,Keith
+KeCF3 - 3,35.39908766315,87.40027694399375,KeCF3,50,SHM - no-till,SHM,CROP,No-till,No-till - diverse rotation,"20 years+ of No-till with 100% residue post-harvest. Covercropping is not typical of the area due to high water holding capacities of the soils paired with low and highly variable annual precipitation.  He has found covercropping to be less efficient at recharging the soil profile than fallow, and has documented yield losses from cover cropping.  Kastens has done covercropping research since 2010, spending over $50,000 to reach this conclusion, thought they still do some small trials currently.  The crop rotation is diverse as it includes a winter grass, summer grass, and legume.  Wheat, corn, yellow peas represent a typical crop rotation.",AG-CROP,NA,KansasState,Keith
+KeN1 - 1,74.75801927942,116.12204245606,KeN1,51,Ref - Native,Ref,RANGE,Perennial,Native Rangeland (>40 years),"Native rangeland, never been tilled to their knowledge (over 40 years)",Reference,NA,KansasState,Keith
+KeN1 - 2,74.21730830871,111.31776246971,KeN1,51,Ref - Native,Ref,RANGE,Perennial,Native Rangeland (>40 years),"Native rangeland, never been tilled to their knowledge (over 40 years)",Reference,NA,KansasState,Keith
+KeN1 - 3,64.09233705201001,98.55283292727,KeN1,51,Ref - Native,Ref,RANGE,Perennial,Native Rangeland (>40 years),"Native rangeland, never been tilled to their knowledge (over 40 years)",Reference,NA,KansasState,Keith
+KeN2 - 1,80.82935210578,134.7140521453,KeN2,52,Ref - Native,Ref,RANGE,Perennial,Native Rangeland - w 1 haying,"No knowledge of tillage in last 33+ years, occasional herbicide treatment for broadleaf, 1 cut of hay per year for last five years",AG-CROP,NA,KansasState,Keith
+KeN2 - 2,101.79524389011999,161.57113912928997,KeN2,52,Ref - Native,Ref,RANGE,Perennial,Native Rangeland - w 1 haying,"No knowledge of tillage in last 33+ years, occasional herbicide treatment for broadleaf, 1 cut of hay per year for last five years",AG-CROP,NA,KansasState,Keith
+KeN2 - 3,92.37329543454,149.76884158394,KeN2,52,Ref - Native,Ref,RANGE,Perennial,Native Rangeland - w 1 haying,"No knowledge of tillage in last 33+ years, occasional herbicide treatment for broadleaf, 1 cut of hay per year for last five years",AG-CROP,NA,KansasState,Keith
+KeN3 - 1,65.42643845186001,117.54039119232,KeN3,53,Ref - Native,Ref,RANGE,Perennial,Native Rangeland (>80years),"Native rangeland, never been tilled to his knowledge (over 80 years).  100-125 700lb steers to a 0.5mile x 1mile pasture",Reference,NA,KansasState,Keith
+KeN3 - 2,56.682115435049994,108.51267384652999,KeN3,53,Ref - Native,Ref,RANGE,Perennial,Native Rangeland (>80years),"Native rangeland, never been tilled to his knowledge (over 80 years).  100-125 700lb steers to a 0.5mile x 1mile pasture",Reference,NA,KansasState,Keith
+KeN3 - 3,53.707237190970005,106.65400006039,KeN3,53,Ref - Native,Ref,RANGE,Perennial,Native Rangeland (>80years),"Native rangeland, never been tilled to his knowledge (over 80 years).  100-125 700lb steers to a 0.5mile x 1mile pasture",Reference,NA,KansasState,Keith
+NAT-1 - 1,11.946,37.197,NAT-1,57,Ref - Native,Ref,GRASS,Perennial,Rangland,NAT,Reference,Wellman,TexasA&MPt-1,Amarillo
+NAT-2 - 2,10.1325,40.6325,NAT-2,58,Ref - Native,Ref,GRASS,Perennial,Rangland,NAT,Reference,Wellman,TexasA&MPt-1,Amarillo
+NAT-3 - 3,13.674,37.106,NAT-3,59,Ref - Native,Ref,GRASS,Perennial,Rangland,NAT,Reference,Wellman,TexasA&MPt-1,Amarillo
+NTM - 1 - 1,12.203999999999999,23.049,NTM - 1,64,SHM - no-till,SHM,CROP,Till,No Till - Mixed - 1,MNT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+NTM - 1 - 2,12.274000000000001,25.454,NTM - 1,64,SHM - no-till,SHM,CROP,Till,No Till - Mixed - 1,MNT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+NTM - 1 - 3,11.855500000000001,30.5915,NTM - 1,64,SHM - no-till,SHM,CROP,Till,No Till - Mixed - 1,MNT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+NTM - 2 - 1,12.271500000000001,28.277,NTM - 2,65,SHM - no-till,SHM,CROP,Till,No Till - Mixed - 2,MNT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+NTM - 2 - 2,15.100000000000001,31.62,NTM - 2,65,SHM - no-till,SHM,CROP,Till,No Till - Mixed - 2,MNT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+NTM - 2 - 3,16.293,33.2455,NTM - 2,65,SHM - no-till,SHM,CROP,Till,No Till - Mixed - 2,MNT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+NTM-3 - 1,14.092500000000001,35.8005,NTM-3,63,SHM - no-till,SHM,CROP,Till,No Till - Mixed - 3,MNT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+NTM-3 - 2,15.996,42.619,NTM-3,63,SHM - no-till,SHM,CROP,Till,No Till - Mixed - 3,MNT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+NTM-3 - 3,10.785499999999999,21.522,NTM-3,63,SHM - no-till,SHM,CROP,Till,No Till - Mixed - 3,MNT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+NTR - 1 - 1,11.7225,28.331,NTR - 1,66,SHM - no-till,SHM,CROP,Till,No Till - Rye - 1,RNT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+NTR - 1 - 2,12.747499999999999,29.433,NTR - 1,66,SHM - no-till,SHM,CROP,Till,No Till - Rye - 1,RNT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+NTR - 1 - 3,14.831,31.721,NTR - 1,66,SHM - no-till,SHM,CROP,Till,No Till - Rye - 1,RNT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+NTR - 2 - 1,11.3335,26.0095,NTR - 2,67,SHM - no-till,SHM,CROP,Till,No Till - Rye - 2,RNT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+NTR - 2 - 2,13.597000000000001,29.597,NTR - 2,67,SHM - no-till,SHM,CROP,Till,No Till - Rye - 2,RNT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+NTR - 2 - 3,11.814,33.999,NTR - 2,67,SHM - no-till,SHM,CROP,Till,No Till - Rye - 2,RNT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+NTR - 3 - 1,15.021,33.491,NTR - 3,68,SHM - no-till,SHM,CROP,Till,No Till - Rye - 3,RNT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+NTR - 3 - 2,15.1525,42.884499999999996,NTR - 3,68,SHM - no-till,SHM,CROP,Till,No Till - Rye - 3,RNT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+NTR - 3 - 3,12.5805,28.0945,NTR - 3,68,SHM - no-till,SHM,CROP,Till,No Till - Rye - 3,RNT,AG-CROP,Lamesa,TexasA&MPt-1,Amarillo
+PGL7-7a,43.69661659090909,66.92458252424242,PGL7,81,Ref - CRP,Ref,GRASS,Perennial,PGL7,PGL,ALT,PCF,WashingtonState,Palouse
+PGL7-7b,58.816319400000005,84.345399,PGL7,81,Ref - CRP,Ref,GRASS,Perennial,PGL7,PGL,ALT,PCF,WashingtonState,Palouse
+PGL7-7c,70.463576,130.5159976,PGL7,81,Ref - CRP,Ref,GRASS,Perennial,PGL7,PGL,ALT,PCF,WashingtonState,Palouse
+PGL9-1,54.139695,185.597135,PGL9,82,Ref - CRP,Ref,GRASS,Perennial,PGL9,PGL,ALT,PCF,WashingtonState,Palouse
+PGL9-2,58.405331999999994,144.376131,PGL9,82,Ref - CRP,Ref,GRASS,Perennial,PGL9,PGL,ALT,PCF,WashingtonState,Palouse
+PGL9-3,65.8435316,91.35774280000001,PGL9,82,Ref - CRP,Ref,GRASS,Perennial,PGL9,PGL,ALT,PCF,WashingtonState,Palouse
+PaH2-1,86.2747061950585,NA,PaH2,70,SHM - Hayland,SHM,GRASS,No-till,Hayland,"Mountain Dairy farm, Mansfield, CT, hayfield",AG-CROP,H2,UConn,Woodbridge
+PaL1-1,96.06042617175606,122.58049562309047,PaL1,71,SHM - Lawn,SHM,GRASS,No-till,Lawn,"Will Ouimet residential lawn, Mansfield, CT",AG-CROP,L1,UConn,Woodbridge
+PaL1-2,112.68197989688801,NA,PaL1,71,SHM - Lawn,SHM,GRASS,No-till,Lawn,"Will Ouimet residential lawn, Mansfield, CT",AG-CROP,L1,UConn,Woodbridge
+PaL2-2,110.3404821075397,NA,PaL2,72,SHM - Lawn,SHM,GRASS,No-till,Lawn,"Nels Barrett residential lawn, Mansfield, CT",AG-CROP,L2,UConn,Canton
+PaM2-1,122.5187505541725,NA,PaM2,74,SHM - Managed forest,SHM,FOREST,Perennial,Managed forest,"UConn forest east of Horsebarn Hill, Storrs, CT, Stand B, ash-dominated, thinned 2013",AG-CROP,M2,UConn,Woodbridge
+PaM2-2,91.937963313009,NA,PaM2,74,SHM - Managed forest,SHM,FOREST,Perennial,Managed forest,"UConn forest east of Horsebarn Hill, Storrs, CT, Stand B, ash-dominated, thinned 2013",AG-CROP,M2,UConn,Woodbridge
+PaT2-1,68.995619934771,107.887343460063,PaT2,78,BAU - Conv till silage corn,BAU,CROP,Till,Conv till silage corn,"Mountain Dairy farm, Mansfield, CT, corn field, conventional till, with manure",AG-CROP,T2,UConn,Woodbridge
+PaU1-1,161.4750653244048,201.4280762463888,PaU1,79,Ref - Unmanaged forest,Ref,FOREST,Perennial,Unmanaged forest,"UConn forest east of Horsebarn Hill, Storrs, CT, Stand C, oak/ hickory upland hardwood, no recent management",Reference,U1,UConn,Woodbridge
+PaU1-2,124.3302068540987,NA,PaU1,79,Ref - Unmanaged forest,Ref,FOREST,Perennial,Unmanaged forest,"UConn forest east of Horsebarn Hill, Storrs, CT, Stand C, oak/ hickory upland hardwood, no recent management",Reference,U1,UConn,Woodbridge
+PaU2-1,185.89820169616343,227.9311625737622,PaU2,80,Ref - Unmanaged forest,Ref,FOREST,Perennial,Unmanaged forest,"UConn forest east of Horsebarn Hill, Storrs, CT, Stand A, ash- dominated, no recent management",Reference,U2,UConn,Woodbridge
+PaU2-2,127.00615504964,NA,PaU2,80,Ref - Unmanaged forest,Ref,FOREST,Perennial,Unmanaged forest,"UConn forest east of Horsebarn Hill, Storrs, CT, Stand A, ash- dominated, no recent management",Reference,U2,UConn,Woodbridge
+REF-1,180.3393948622367,384.9872549522579,REF,85,Ref - Native,Ref,RANGE,Perennial,Native rangeland,Undisturbed fencerow running W-E located at the southern edge of the CON field,Reference,Mower,UnivOfMinnesota,Kenyon
+REF-2,277.0859171741133,372.2767855209749,REF,85,Ref - Native,Ref,RANGE,Perennial,Native rangeland,Undisturbed fencerow running W-E located at the southern edge of the CON field,Reference,Mower,UnivOfMinnesota,Kenyon
+REF-3,129.0754447713581,312.886006856471,REF,85,Ref - Native,Ref,RANGE,Perennial,Native rangeland,Undisturbed fencerow running W-E located at the southern edge of the CON field,Reference,Mower,UnivOfMinnesota,Kenyon
+REF-4,189.8369660625894,267.85200920818943,REF,85,Ref - Native,Ref,RANGE,Perennial,Native rangeland,Undisturbed fencerow running W-E located at the southern edge of the CON field,Reference,Mower,UnivOfMinnesota,Kenyon
+REF-5,171.45614307183138,309.45023776665016,REF,85,Ref - Native,Ref,RANGE,Perennial,Native rangeland,Undisturbed fencerow running W-E located at the southern edge of the CON field,Reference,Mower,UnivOfMinnesota,Kenyon
+REF-6,223.03962455479967,328.9561528291423,REF,85,Ref - Native,Ref,RANGE,Perennial,Native rangeland,Undisturbed fencerow running W-E located at the southern edge of the CON field,Reference,Mower,UnivOfMinnesota,Kenyon
+REF-7,116.24429561554899,323.2179218284148,REF,85,Ref - Native,Ref,RANGE,Perennial,Native rangeland,Undisturbed fencerow running W-E located at the southern edge of the CON field,Reference,Mower,UnivOfMinnesota,Kenyon
+REF-8,147.1552800563939,303.4966795091366,REF,85,Ref - Native,Ref,RANGE,Perennial,Native rangeland,Undisturbed fencerow running W-E located at the southern edge of the CON field,Reference,Mower,UnivOfMinnesota,Kenyon
+REF-9,192.7737109004155,260.764161511724,REF,85,Ref - Native,Ref,RANGE,Perennial,Native rangeland,Undisturbed fencerow running W-E located at the southern edge of the CON field,Reference,Mower,UnivOfMinnesota,Kenyon
