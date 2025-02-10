@@ -2,7 +2,9 @@
 title: "dsp4sh_ref_states2"
 author: "Katy Dynarski"
 date: "2024-08-07"
-output: html_document
+output: 
+  html_document: 
+    keep_md: yes
 editor_options: 
   markdown: 
     wrap: 72
@@ -104,123 +106,6 @@ soc_pedon %>% slice_max(soc_stock_100cm, n = 1) %>%
 
 ## Fig 1 - Boxplots of total SOC stocks under different management treatments
 
-Calculate aov and generate significant difference letters with TukeyHSD:
-
-```{r calculate significant differences for 100 cm stocks and 30 cm stocks - grouped by project, echo=FALSE}
-# One option - use purrr to calculate significant differences between treatment groups separately for each project
-# This feels like it violates multiple comparisons statistical practices, but also the projects are independent?? IDK
-
-# Fix Texas A&M project name so it won't break multcompletters
-soc_pedon_namecorr <- soc_pedon %>%
-    mutate(project = str_replace(project, "TexasA&MPt-1", "TexasA&MPt1"))
-
-# Filter out projects with NAs that will also break multcompletters
-soc_pedon_namecorr100 <- soc_pedon_namecorr %>%
-  filter(project!="TexasA&MPt-2", project!="UTRGV", project!="UConn")
-
-# Calculate significance letters for 100 cm stocks
-soc100_tukey <- soc_pedon_namecorr100 %>%
-  group_by(project) %>%
-  nest() %>%
-  mutate(cld2 = map(data, ~{
-    aov <- aov(soc_stock_100cm ~ label, data=.x)
-    hsd <- TukeyHSD(aov)
-    cld <- multcompLetters4(aov, hsd)
-    cld2 <- data.frame(letters = cld$'label'$Letters) %>%
-      rownames_to_column(var="label")
-    return(cld2)
-                     })) %>%
-  ungroup() %>%
-  transmute(project, cld2) %>%
-  unnest(cols=c(cld2))
-
-# Make table with summary statistics to map letters to correct position
-soc100_summary_grouped <- soc_pedon_namecorr100 %>% 
-  group_by(project, label) %>%
-  summarise(max = max(soc_stock_100cm, na.rm=TRUE)) %>%
-  ungroup()
-
-# join positions to letters
-soc100_letters_sum_grouped <- soc100_tukey %>%
-  left_join(soc100_summary_grouped, by=c("project", "label"))
-
-# Repeat for 30 cm stocks
-soc_pedon_namecorr30 <- soc_pedon_namecorr %>%
-  filter(project!="TexasA&MPt-2")
-
-# Calculate significance letters for 30 cm stocks
-soc30_tukey <- soc_pedon_namecorr30 %>%
-  group_by(project) %>%
-  nest() %>%
-  mutate(cld2 = map(data, ~{
-    aov <- aov(soc_stock_0_30cm ~ label, data=.x)
-    hsd <- TukeyHSD(aov)
-    cld <- multcompLetters4(aov, hsd)
-    cld2 <- data.frame(letters = cld$'label'$Letters) %>%
-      rownames_to_column(var="label")
-    return(cld2)
-                     })) %>%
-  ungroup() %>%
-  transmute(project, cld2) %>%
-  unnest(cols=c(cld2))
-
-# Make table with summary statistics to map letters to correct position
-soc30_summary_grouped <- soc_pedon_namecorr30 %>% 
-  group_by(project, label) %>%
-  summarise(max = max(soc_stock_0_30cm, na.rm=TRUE)) %>%
-  ungroup()
-
-# join positions to letters
-soc30_letters_sum_grouped <- soc30_tukey %>%
-  left_join(soc30_summary_grouped, by=c("project", "label"))
-```
-
-```{r calculate significant differences for 100 cm stocks and 30 cm stocks - ungrouped, echo=FALSE}
-# Other option - run AOV and TukeyHSD on all data, use project*label interaction
-# Run AOV, HSD, and pull out compact letter display for 100 cm stocks
-soc100_aov <- aov(soc_stock_100cm ~ project*label, data=soc_pedon_namecorr)
-summary(soc100_aov)
-soc100_hsd <- TukeyHSD(soc100_aov)
-soc100_cld <- multcompLetters4(soc100_aov, soc100_hsd)
-
-# make letters into df and assign to correct project and label
-soc100_cld2 <- data.frame(letters = soc100_cld$`project:label`$Letters) %>%
-  rownames_to_column(var="temp") %>%
-  separate_wider_delim(temp, delim = ":", names = c("project", "label"))
-
-# Make table with summary statistics to map letters to correct position
-soc100_summary <- soc_pedon_namecorr %>% 
-  group_by(project, label) %>%
-  summarise(max = max(soc_stock_100cm, na.rm=TRUE)) %>%
-  ungroup()
-
-# join positions to letters
-soc100_letters_sum <- soc100_cld2 %>%
-  left_join(soc100_summary, by=c("project", "label"))
-
-# repeat for 30 cm stocks
-soc30_aov <- aov(soc_stock_0_30cm ~ project*label, data=soc_pedon_namecorr)
-summary(soc30_aov)
-soc30_hsd <- TukeyHSD(soc30_aov)
-soc30_hsd_int <- pluck(soc30_hsd, 3) %>%
-  na.omit()
-soc30_letters <- multcompLetters(soc30_hsd_int[,4])
-soc30_letter_df <- data.frame(soc30_letters$Letters) %>%
-  rownames_to_column(var="temp") %>%
-  rename(letters = soc30_letters.Letters) %>%
-  separate_wider_delim(temp, delim = ":", names = c("project", "label"))
-
-# Make table with summary statistics to map letters to correct position
-soc30_summary <- soc_pedon_namecorr %>% 
-  group_by(project, label) %>%
-  summarise(max = max(soc_stock_0_30cm, na.rm=TRUE)) %>%
-  ungroup()
-
-# join positions to letters
-soc30_letters_sum <- soc30_letter_df %>%
-  left_join(soc30_summary, by=c("project", "label"))
-```
-
 Plot boxplots of total SOC stocks under different management treatments:
 
 ```{r Figure 1 - soc 100 cm and 30 cm stock boxplots with no significance letters, echo=FALSE}
@@ -280,44 +165,6 @@ plot_grid(soc_nolett_grid, soc_nolett_leg, rel_widths = c(1, .23))
 ggsave(here("figs", "ref_states_figs","dsp4sh_soc_stocks.png"), width=11, height=10, units="in", dpi=400)
 ```
 
-```{r Figure 1 - soc 100 cm and 30 cm stock boxplots with grouped significance letters, echo=FALSE}
-
-# Boxplot comparing total SOC stocks (100 cm) between treatments within soil types
-soc100_boxplot <- ggplot(soc_pedon_namecorr, 
-                         aes(x=project, y=soc_stock_100cm, fill=label)) +
-  geom_boxplot() +
-  geom_text(data=soc100_letters_sum_grouped, aes(x=project, y=max, label=letters), 
-            vjust = -0.5,
-            position=position_dodge(width=0.75)) +
-  labs(x="Project", y="SOC stock to 100 cm depth (Mg/ha)") +
-  scale_fill_viridis(discrete=TRUE, name="Management") +
-  theme_katy_grid() +
-  theme(axis.text.x = element_text(angle = 45, hjust=1))
-soc100_boxplot
-
-# Boxplot comparing total SOC stocks (30 cm) between treatments within soil types
-soc30_boxplot <- ggplot(soc_pedon_namecorr %>% filter(project!="TexasA&MPt-2"), 
-                        aes(x=project, y=soc_stock_0_30cm, fill=label)) +
-  geom_boxplot() +
-  geom_text(data=soc30_letters_sum_grouped, aes(x=project, y=max, label=letters), 
-            vjust = -0.5,
-            position=position_dodge(width=0.75)) +
-  labs(x="Project", y="SOC stock to 30 cm depth (Mg/ha)") +
-  scale_fill_viridis(discrete=TRUE, name="Management") +
-  theme_katy_grid() +
-  theme(axis.text.x = element_text(angle = 45, hjust=1))
-soc30_boxplot
-
-soc_grid <- plot_grid(soc100_boxplot + theme(legend.position="none", axis.title.x=element_blank(), axis.text.x=element_blank()),
-          soc30_boxplot + theme(legend.position="none"),
-          ncol=1, labels=c("A", "B"), rel_heights=c(1, 1.25))
-
-soc_leg <- get_legend(soc100_boxplot)
-
-plot_grid(soc_grid, soc_leg, rel_widths = c(1, .23))
-ggsave(here("figs", "ref_states_figs","fig1_soc_stock_boxplot_grouped.png"), width=11, height=9, units="in", dpi=400)
-```
-
 Takeaways:
 
 -   Significant variability in SOC stocks between sites (expected)
@@ -332,43 +179,6 @@ Takeaways:
 
 Plot alternate version with significance letters ungrouped (not shown
 because it is difficult to interpret):
-
-```{r Figure 1 alt - soc 100 cm and 30 cm boxplots with ungrouped significance letters, eval=FALSE, echo=FALSE}
-# Boxplot comparing total SOC stocks (100 cm) between treatments within soil types
-soc100_boxplot2 <- ggplot(soc_pedon_namecorr, 
-                         aes(x=project, y=soc_stock_100cm, fill=label)) +
-  geom_boxplot() +
-  geom_text(data=soc100_letters_sum, aes(x=project, y=max, label=letters), 
-            vjust = -0.5,
-            position=position_dodge(width=0.75)) +
-  labs(x="Project", y="SOC stock to 100 cm depth (Mg/ha)") +
-  scale_fill_viridis(discrete=TRUE, name="Management") +
-  theme_katy_grid() +
-  theme(axis.text.x = element_text(angle = 45, hjust=1))
-soc100_boxplot2
-
-# Boxplot comparing total SOC stocks (30 cm) between treatments within soil types
-soc30_boxplot2 <- ggplot(soc_pedon_namecorr %>% filter(project!="TexasA&MPt-2"), 
-                        aes(x=project, y=soc_stock_0_30cm, fill=label)) +
-  geom_boxplot() +
-  geom_text(data=soc30_letters_sum, aes(x=project, y=max, label=letters), 
-            vjust = -0.5,
-            position=position_dodge(width=0.75)) +
-  labs(x="Project", y="SOC stock to 30 cm depth (Mg/ha)") +
-  scale_fill_viridis(discrete=TRUE, name="Management") +
-  theme_katy_grid() +
-  theme(axis.text.x = element_text(angle = 45, hjust=1))
-soc30_boxplot2
-
-soc_grid2 <- plot_grid(soc100_boxplot2 + theme(legend.position="none", axis.title.x=element_blank(), axis.text.x=element_blank()),
-          soc30_boxplot2 + theme(legend.position="none"),
-          ncol=1, labels=c("A", "B"), rel_heights=c(1, 1.25))
-
-soc_leg2 <- get_legend(soc100_boxplot2)
-
-plot_grid(soc_grid2, soc_leg2, rel_widths = c(1, .23))
-ggsave(here("figs", "ref_states_figs","fig1_soc_stock_boxplot_ungrouped.png"), width=11, height=9, units="in", dpi=400)
-```
 
 ## Boxplots of SOC stock data calculated via ESM
 
@@ -605,7 +415,7 @@ stock is significantly different from BAU and Ref groups.
 
 ## Plot results of mixed linear model
 
-```{r Fig 3 - plot results of mixed linear model to 30 and 100 cm, echo=FALSE}
+```{r plot results of mixed linear model to 30 and 100 cm, echo=FALSE}
 # Plot predictions of 30cm SOC stocks under each treatment
 pred_stock30 <- ggpredict(soc_stock30_mixed, terms = c("label"))
 pred30 <- ggplot(pred_stock30, aes(x=x, y=predicted)) +
@@ -670,7 +480,7 @@ shape_soc_plot
 
 Boxplots of SHAPE SOC scores:
 
-```{r Fig 5 - panel figure showing boxplot of SHAPE scores and regression with stocks, echo=FALSE}
+```{r Fig 4 - panel figure showing boxplot of SHAPE scores and regression with stocks, echo=FALSE}
 # Join in project data
 shape_spatial_proj <- shape_spatial %>%
   select(dsp_pedon_id, score_mean_soc, gt_90_soc) %>%
