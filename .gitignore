@@ -47,3 +47,12 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Lots of files to ignore
+code_archive/
+data_processed_archive/
+data_raw/
+data_raw_archive/
+figs/
+figs_archive/
+wc2_5/

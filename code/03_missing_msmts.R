@@ -7,6 +7,10 @@
 
 # 0 - Load libraries and import data ----
 library(aqp)
+library(here)
+library(zoo)
+library(soilDB)
+library(sf)
 library(tidyverse)
 
 coop_data <- read.csv(here("data_processed","02_coop_data_horizons_valid.csv"))
@@ -206,6 +210,9 @@ hzdesgnname(ill_sub_filled_spc) <- 'hzdesg'
 plotSPC(ill_sub_filled_spc, color="bd_fill") # looks good
 
 # 4.6 - UTRGV BD Fill ####
+utrgv_data <- coop_data %>%
+  filter(project=="UTRGV")
+
 utrgv_bd <- subset(coop_spc, project=="UTRGV")
 plotSPC(utrgv_bd, color='bulk_density')
 # Bulk density was only collected to 30 cm
@@ -225,8 +232,65 @@ hidalgo <- coop_data %>%
   filter(soil=="Hidalgo") %>%
   distinct(project) # No, just UTRGV
 
-# The best way to fill this data would probably be with a PTF ?
-# For now - will only be able to calculate to 30 cm, alas!
+# Fill this data with representative values for Hidalgo soil series from SSURGO
+# get pedon locations
+hidalgo_locations <- coop_data %>%
+  filter(project=="UTRGV") %>%
+  select(project, label, trt, soil, pedon_x, pedon_y) %>%
+  group_by(project, label, trt) %>%
+  distinct() %>%
+  slice(1)
+
+# convert to sf object
+hidalgo_pts <- st_as_sf(hidalgo_locations, coords = c("pedon_x", "pedon_y"), crs = 4326)
+
+# SDA query
+# First get map unit keys
+hidalgo_mu <- SDA_spatialQuery(hidalgo_pts, what = 'mukey', geomIntersection = TRUE, byFeature=TRUE)
+# bind to pedons
+hidalgo_pts_mu = cbind(hidalgo_pts, hidalgo_mu)
+
+# Get component data
+hidalgo_comp_list <- sprintf("mukey IN %s", format_SQL_in_statement(hidalgo_mu$mukey))
+# query to return mukey
+hidalgo_comp_data <- fetchSDA(WHERE = hidalgo_comp_list, duplicates = TRUE, childs = FALSE, 
+                              nullFragsAreZero = TRUE, stringsAsFactors = FALSE, rmHzErrors = FALSE)
+plot(hidalgo_comp_data, color = "dbthirdbar_r", label = 'compname', cex.names = 0.75)
+
+hidalgo_comp_db <- as(hidalgo_comp_data, "data.frame") %>%
+  filter(compname %in% hidalgo_locations$soil) %>%
+  select(compname, comppct_r, hzname, hzdept_r, hzdepb_r, dbthirdbar_r) %>%
+  distinct()
+
+# use AQP dice() to slice by depth, calculate average BD for each depth
+# make SPC
+hidalgo_spc <- hidalgo_comp_db
+depths(hidalgo_spc) <- compname ~ hzdept_r + hzdepb_r
+hzdesgnname(hidalgo_spc) <- 'hzname'
+
+# dice
+hidalgo_dice <- aqp::dice(hidalgo_spc, fm=0:max(hidalgo_spc) ~ dbthirdbar_r + hzname)
+plotSPC(hidalgo_dice, color='dbthirdbar_r')
+
+# make diced profile into dataframe, add in depth class of original sampling, calculate mean db for each depth class
+hidalgo_mean_bd <- horizons(hidalgo_dice) %>%
+  filter(hzdepb_r <= 100) %>% # remove data below 100 cm depth
+  mutate(sampled_depth_bottom = case_when(hzdepb_r <=5 ~ 5,
+                                          hzdepb_r <=10 ~ 10,
+                                          hzdepb_r <=30 ~ 30,
+                                          hzdepb_r <=50 ~ 50,
+                                          hzdepb_r <=80 ~ 80,
+                                          hzdepb_r <=100 ~ 100)) %>%
+  group_by(sampled_depth_bottom) %>%
+  summarize(ssurgo_mean_bd = mean(dbthirdbar_r))
+
+# fill in the missing data 
+utrgv_bd_filled <- utrgv_data %>%
+  left_join(hidalgo_mean_bd, by=c("hrzdep_b" = "sampled_depth_bottom")) %>%
+  group_by(hrzdep_b) %>% # group by horizon depth
+  mutate(bd_fill = case_when(!is.na(bulk_density) ~ bulk_density,
+                             is.na(bulk_density) ~ ssurgo_mean_bd)) %>%
+  select(-ssurgo_mean_bd)
 
 # 4.7 - UConn BD Fill ####
 uconn_bd <- subset(coop_spc, project=="UConn")
@@ -242,12 +306,13 @@ plotSPC(uconn_bd, color="bd_fill")
 uconn_bd_filled <- horizons(uconn_bd)
 
 # 4 - Bulk Density - Join project data back together ####
-# need to also add back in the data where no calculations were performed - Texas A&M pt1and2, OSU, and UTRGV
+# need to also add back in the data where no calculations were performed - Texas A&M pt1and2, and OSU
 coop_data_bd_fine <- coop_data %>%
-  filter(project=="TexasA&MPt-1" | project=="TexasA&MPt-2" | project=="OregonState" |project == "UTRGV") %>%
+  filter(project=="TexasA&MPt-1" | project=="TexasA&MPt-2" | project=="OregonState") %>%
   mutate(bd_fill = bulk_density)
 
-coop_data_bd_filled <- bind_rows(ks_bd_filled, ncs_bd_filled, wash_bd_filled, minn_bd_filled, ill_sub_bd_filled, uconn_bd_filled) %>%
+coop_data_bd_filled <- bind_rows(ks_bd_filled, ncs_bd_filled, wash_bd_filled, minn_bd_filled, 
+                                 ill_sub_bd_filled, uconn_bd_filled, utrgv_bd_filled) %>%
   select(!c('hzID', 'depth_class')) %>% # all data where BD were missing and needed to be calculated
   bind_rows(coop_data_bd_fine)
 

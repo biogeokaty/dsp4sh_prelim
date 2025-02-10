@@ -1,0 +1,1150 @@
+---
+title: "dsp4sh_ref_states2"
+author: "Katy Dynarski"
+date: "2024-08-07"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Load libraries
+library(here)
+library(janitor)
+library(aqp)
+library(soilDB)
+library(flextable)
+library(lme4)
+library(multcomp)
+library(multcompView)
+library(ggeffects)
+library(ggrepel)
+library(ggspatial)
+library(ggeasy)
+library(ggpubr)
+library(ggtern)
+library(soiltexture)
+library(sf)
+library(viridis)
+library(paletteer)
+library(cowplot)
+library(tidyverse)
+
+# Load data
+soc_pedon <- read.csv(here("data_processed", "05_soc_pedon_clim.csv"))
+soc_horizon <- read.csv(here("data_processed", "05_soc_horizon_clim.csv"))
+soc_pedon_filt <- read.csv(here("data_processed", "05_soc_pedon_filt.csv"))
+soc_horizon_filt <- read.csv(here("data_processed", "05_soc_horizon_filt.csv"))
+project <- read.csv(here("data_processed", "05_project_data.csv"))
+shape_all <- read.csv(here("data_processed", "shape_scores_all.csv"))
+shape_spatial <- read.csv(here("data_processed", "shape_spatial.csv")) %>% clean_names()
+esm_all <- read.csv("C:/Users/Katherine.Dynarski/Documents/R Projects/esm/data_processed/esm_all.csv")
+
+# Make list with mean and sd functions - useful for generating summary tables
+mean_sd <- list(
+  mean = ~round(mean(.x, na.rm = TRUE), 2), 
+  sd = ~round(sd(.x, na.rm = TRUE), 2)
+)
+
+min_max <- list(
+  min = ~min(.x, na.rm=TRUE), 
+  max = ~max(.x, na.rm=TRUE)
+)
+
+theme_katy <- function(base_size=14) {
+  theme_classic(base_size=base_size) %+replace%
+    theme(# Legend
+      legend.title=element_text(size=rel(1)), legend.text=element_text(size=rel(.8)),
+      #axes                      
+      axis.text=element_text(size=rel(.8)),
+      axis.title=element_text(size=rel(1)))
+}
+
+theme_katy_grid <- function(base_size=14) {
+  theme_classic(base_size=base_size) %+replace%
+    theme(# Legend
+      legend.title=element_text(size=rel(1)), legend.text=element_text(size=rel(.8)),
+      #axes                      
+      axis.text=element_text(size=rel(.8)),
+      axis.title=element_text(size=rel(1)),
+      # set margins (necessary for figure to not awkwardly overlap when using plot_grid in cowplot)
+      plot.margin=unit(c(0.5, 0.5, 0.5, 0.5), "cm"))
+}
+```
+
+# Summary Figures of SOC Stocks
+
+## Summary table of SOC stocks across projects, soils, and treatments
+
+Mean, standard deviation, and n for SOC stocks calculated to 30 cm and
+100 cm for all soils in DSP4SH projects.
+
+```{r Table 1 - soc summary table}
+soc_summary <- soc_pedon %>%
+  group_by(project, soil, label) %>%
+  summarize(across(soc_stock_0_30cm:soc_stock_100cm, mean_sd), n=n())
+flextable(soc_summary)
+
+# range in SOC values
+soc_min_max <- soc_pedon %>%
+  summarize(across(soc_stock_0_30cm:soc_stock_100cm, min_max), n=n())
+flextable(soc_min_max)
+
+# which is the min?
+soc_pedon %>% slice_min(soc_stock_100cm, n = 1) %>%
+  select(project, label, dsp_pedon_id, soc_stock_100cm)
+
+# which is the max?
+soc_pedon %>% slice_max(soc_stock_100cm, n = 1) %>%
+  select(project, label, dsp_pedon_id, soc_stock_100cm)
+```
+
+## Fig 1 - Boxplots of total SOC stocks under different management treatments
+
+Calculate aov and generate significant difference letters with TukeyHSD:
+
+```{r calculate significant differences for 100 cm stocks and 30 cm stocks - grouped by project, echo=FALSE}
+# One option - use purrr to calculate significant differences between treatment groups separately for each project
+# This feels like it violates multiple comparisons statistical practices, but also the projects are independent?? IDK
+
+# Fix Texas A&M project name so it won't break multcompletters
+soc_pedon_namecorr <- soc_pedon %>%
+    mutate(project = str_replace(project, "TexasA&MPt-1", "TexasA&MPt1"))
+
+# Filter out projects with NAs that will also break multcompletters
+soc_pedon_namecorr100 <- soc_pedon_namecorr %>%
+  filter(project!="TexasA&MPt-2", project!="UTRGV", project!="UConn")
+
+# Calculate significance letters for 100 cm stocks
+soc100_tukey <- soc_pedon_namecorr100 %>%
+  group_by(project) %>%
+  nest() %>%
+  mutate(cld2 = map(data, ~{
+    aov <- aov(soc_stock_100cm ~ label, data=.x)
+    hsd <- TukeyHSD(aov)
+    cld <- multcompLetters4(aov, hsd)
+    cld2 <- data.frame(letters = cld$'label'$Letters) %>%
+      rownames_to_column(var="label")
+    return(cld2)
+                     })) %>%
+  ungroup() %>%
+  transmute(project, cld2) %>%
+  unnest(cols=c(cld2))
+
+# Make table with summary statistics to map letters to correct position
+soc100_summary_grouped <- soc_pedon_namecorr100 %>% 
+  group_by(project, label) %>%
+  summarise(max = max(soc_stock_100cm, na.rm=TRUE)) %>%
+  ungroup()
+
+# join positions to letters
+soc100_letters_sum_grouped <- soc100_tukey %>%
+  left_join(soc100_summary_grouped, by=c("project", "label"))
+
+# Repeat for 30 cm stocks
+soc_pedon_namecorr30 <- soc_pedon_namecorr %>%
+  filter(project!="TexasA&MPt-2")
+
+# Calculate significance letters for 30 cm stocks
+soc30_tukey <- soc_pedon_namecorr30 %>%
+  group_by(project) %>%
+  nest() %>%
+  mutate(cld2 = map(data, ~{
+    aov <- aov(soc_stock_0_30cm ~ label, data=.x)
+    hsd <- TukeyHSD(aov)
+    cld <- multcompLetters4(aov, hsd)
+    cld2 <- data.frame(letters = cld$'label'$Letters) %>%
+      rownames_to_column(var="label")
+    return(cld2)
+                     })) %>%
+  ungroup() %>%
+  transmute(project, cld2) %>%
+  unnest(cols=c(cld2))
+
+# Make table with summary statistics to map letters to correct position
+soc30_summary_grouped <- soc_pedon_namecorr30 %>% 
+  group_by(project, label) %>%
+  summarise(max = max(soc_stock_0_30cm, na.rm=TRUE)) %>%
+  ungroup()
+
+# join positions to letters
+soc30_letters_sum_grouped <- soc30_tukey %>%
+  left_join(soc30_summary_grouped, by=c("project", "label"))
+```
+
+```{r calculate significant differences for 100 cm stocks and 30 cm stocks - ungrouped, echo=FALSE}
+# Other option - run AOV and TukeyHSD on all data, use project*label interaction
+# Run AOV, HSD, and pull out compact letter display for 100 cm stocks
+soc100_aov <- aov(soc_stock_100cm ~ project*label, data=soc_pedon_namecorr)
+summary(soc100_aov)
+soc100_hsd <- TukeyHSD(soc100_aov)
+soc100_cld <- multcompLetters4(soc100_aov, soc100_hsd)
+
+# make letters into df and assign to correct project and label
+soc100_cld2 <- data.frame(letters = soc100_cld$`project:label`$Letters) %>%
+  rownames_to_column(var="temp") %>%
+  separate_wider_delim(temp, delim = ":", names = c("project", "label"))
+
+# Make table with summary statistics to map letters to correct position
+soc100_summary <- soc_pedon_namecorr %>% 
+  group_by(project, label) %>%
+  summarise(max = max(soc_stock_100cm, na.rm=TRUE)) %>%
+  ungroup()
+
+# join positions to letters
+soc100_letters_sum <- soc100_cld2 %>%
+  left_join(soc100_summary, by=c("project", "label"))
+
+# repeat for 30 cm stocks
+soc30_aov <- aov(soc_stock_0_30cm ~ project*label, data=soc_pedon_namecorr)
+summary(soc30_aov)
+soc30_hsd <- TukeyHSD(soc30_aov)
+soc30_hsd_int <- pluck(soc30_hsd, 3) %>%
+  na.omit()
+soc30_letters <- multcompLetters(soc30_hsd_int[,4])
+soc30_letter_df <- data.frame(soc30_letters$Letters) %>%
+  rownames_to_column(var="temp") %>%
+  rename(letters = soc30_letters.Letters) %>%
+  separate_wider_delim(temp, delim = ":", names = c("project", "label"))
+
+# Make table with summary statistics to map letters to correct position
+soc30_summary <- soc_pedon_namecorr %>% 
+  group_by(project, label) %>%
+  summarise(max = max(soc_stock_0_30cm, na.rm=TRUE)) %>%
+  ungroup()
+
+# join positions to letters
+soc30_letters_sum <- soc30_letter_df %>%
+  left_join(soc30_summary, by=c("project", "label"))
+```
+
+Plot boxplots of total SOC stocks under different management treatments:
+
+```{r Figure 1 - soc 100 cm and 30 cm stock boxplots with no significance letters, echo=FALSE}
+map_avg <- project %>%
+  group_by(project) %>%
+  summarize(site_avg_map = mean(map, na.rm=TRUE))
+
+soc_pedon_toplot <- soc_pedon %>%
+  left_join(map_avg, by="project") %>%
+  filter(project!="TexasA&MPt-2") %>%
+  mutate(label=factor(label, levels=c("BAU", "SHM", "Ref")))
+
+project_labels <- c("UnivOfMinnesota" = "University of Minnesota",
+                    "UTRGV" = "University of Texas - RGV",
+                    "WashingtonState" = "Washington State",
+                    "TexasA&MPt-1" = "Texas A&M - 1",
+                    "TexasA&MPt-2" = "Texas A&M - 2",
+                    "NCState" = "North Carolina State",
+                    "Illinois" = "University of Illinois",
+                    "OregonState" = "Oregon State",
+                    "KansasState" = "Kansas State",
+                    "UConn" = "University of Connecticut")
+
+# Boxplot comparing total SOC stocks (100 cm) between treatments within soil types
+soc100_boxplot_nolett <- ggplot(soc_pedon_toplot, 
+                         aes(x=project, y=soc_stock_100cm, fill=label)) +
+  geom_boxplot() +
+  labs(x="Project", y="SOC stock to 100 cm depth (Mg/ha)") +
+  scale_x_discrete(labels=project_labels) +
+  scale_fill_manual(values=c("#FED789FF","#72874EFF","#476F84FF"),
+                     breaks=c("BAU", "SHM", "Ref"), 
+                    name="Management") +
+  theme_katy_grid() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+soc100_boxplot_nolett
+
+# Boxplot comparing total SOC stocks (30 cm) between treatments within soil types
+soc30_boxplot_nolett <- ggplot(soc_pedon_toplot, 
+                         aes(x=project, y=soc_stock_0_30cm, fill=label)) +
+  geom_boxplot() +
+  labs(x="Project", y="SOC stock to 30 cm depth (Mg/ha)") +
+  scale_x_discrete(labels=project_labels) +
+  scale_fill_manual(values=c("#FED789FF","#72874EFF","#476F84FF"),
+                     breaks=c("BAU", "SHM", "Ref"), 
+                    name="Management") +
+  theme_katy_grid() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+soc30_boxplot_nolett
+
+soc_nolett_grid <- plot_grid(soc30_boxplot_nolett + theme(legend.position="none", axis.title.x=element_blank(), axis.text.x=element_blank()),
+          soc100_boxplot_nolett + theme(legend.position="none"),
+          ncol=1, labels=c("A", "B"), rel_heights=c(1, 1.4))
+soc_nolett_grid
+soc_nolett_leg <- get_legend(soc100_boxplot_nolett)
+
+plot_grid(soc_nolett_grid, soc_nolett_leg, rel_widths = c(1, .23))
+ggsave(here("figs", "ref_states_figs","dsp4sh_soc_stocks.png"), width=11, height=10, units="in", dpi=400)
+```
+
+```{r Figure 1 - soc 100 cm and 30 cm stock boxplots with grouped significance letters, echo=FALSE}
+
+# Boxplot comparing total SOC stocks (100 cm) between treatments within soil types
+soc100_boxplot <- ggplot(soc_pedon_namecorr, 
+                         aes(x=project, y=soc_stock_100cm, fill=label)) +
+  geom_boxplot() +
+  geom_text(data=soc100_letters_sum_grouped, aes(x=project, y=max, label=letters), 
+            vjust = -0.5,
+            position=position_dodge(width=0.75)) +
+  labs(x="Project", y="SOC stock to 100 cm depth (Mg/ha)") +
+  scale_fill_viridis(discrete=TRUE, name="Management") +
+  theme_katy_grid() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+soc100_boxplot
+
+# Boxplot comparing total SOC stocks (30 cm) between treatments within soil types
+soc30_boxplot <- ggplot(soc_pedon_namecorr %>% filter(project!="TexasA&MPt-2"), 
+                        aes(x=project, y=soc_stock_0_30cm, fill=label)) +
+  geom_boxplot() +
+  geom_text(data=soc30_letters_sum_grouped, aes(x=project, y=max, label=letters), 
+            vjust = -0.5,
+            position=position_dodge(width=0.75)) +
+  labs(x="Project", y="SOC stock to 30 cm depth (Mg/ha)") +
+  scale_fill_viridis(discrete=TRUE, name="Management") +
+  theme_katy_grid() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+soc30_boxplot
+
+soc_grid <- plot_grid(soc100_boxplot + theme(legend.position="none", axis.title.x=element_blank(), axis.text.x=element_blank()),
+          soc30_boxplot + theme(legend.position="none"),
+          ncol=1, labels=c("A", "B"), rel_heights=c(1, 1.25))
+
+soc_leg <- get_legend(soc100_boxplot)
+
+plot_grid(soc_grid, soc_leg, rel_widths = c(1, .23))
+ggsave(here("figs", "ref_states_figs","fig1_soc_stock_boxplot_grouped.png"), width=11, height=9, units="in", dpi=400)
+```
+
+Takeaways:
+
+-   Significant variability in SOC stocks between sites (expected)
+
+-   Differences between treatments more apparent at 30 cm depth than 100
+    cm depth
+
+-   Reference sites are significantly higher in C at some, but not all
+    sites (Illinois, UConn, University of Minnesota, UTRGV)
+
+-   Differences between SHM and BAU are infrequently observed
+
+Plot alternate version with significance letters ungrouped (not shown
+because it is difficult to interpret):
+
+```{r Figure 1 alt - soc 100 cm and 30 cm boxplots with ungrouped significance letters, eval=FALSE, echo=FALSE}
+# Boxplot comparing total SOC stocks (100 cm) between treatments within soil types
+soc100_boxplot2 <- ggplot(soc_pedon_namecorr, 
+                         aes(x=project, y=soc_stock_100cm, fill=label)) +
+  geom_boxplot() +
+  geom_text(data=soc100_letters_sum, aes(x=project, y=max, label=letters), 
+            vjust = -0.5,
+            position=position_dodge(width=0.75)) +
+  labs(x="Project", y="SOC stock to 100 cm depth (Mg/ha)") +
+  scale_fill_viridis(discrete=TRUE, name="Management") +
+  theme_katy_grid() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+soc100_boxplot2
+
+# Boxplot comparing total SOC stocks (30 cm) between treatments within soil types
+soc30_boxplot2 <- ggplot(soc_pedon_namecorr %>% filter(project!="TexasA&MPt-2"), 
+                        aes(x=project, y=soc_stock_0_30cm, fill=label)) +
+  geom_boxplot() +
+  geom_text(data=soc30_letters_sum, aes(x=project, y=max, label=letters), 
+            vjust = -0.5,
+            position=position_dodge(width=0.75)) +
+  labs(x="Project", y="SOC stock to 30 cm depth (Mg/ha)") +
+  scale_fill_viridis(discrete=TRUE, name="Management") +
+  theme_katy_grid() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+soc30_boxplot2
+
+soc_grid2 <- plot_grid(soc100_boxplot2 + theme(legend.position="none", axis.title.x=element_blank(), axis.text.x=element_blank()),
+          soc30_boxplot2 + theme(legend.position="none"),
+          ncol=1, labels=c("A", "B"), rel_heights=c(1, 1.25))
+
+soc_leg2 <- get_legend(soc100_boxplot2)
+
+plot_grid(soc_grid2, soc_leg2, rel_widths = c(1, .23))
+ggsave(here("figs", "ref_states_figs","fig1_soc_stock_boxplot_ungrouped.png"), width=11, height=9, units="in", dpi=400)
+```
+
+## Boxplots of SOC stock data calculated via ESM
+
+```{r Figure S1 - soc 100 cm and 30 cm stock boxplots calculated via ESM, echo=FALSE}
+esm_standard_min <- esm_all %>%
+  filter(depth_increments == "standard", ref_data =="indv_project",
+         method_long== "esm2_min")
+
+esm_standard_min_totals <- esm_standard_min %>%
+  group_by(project, label, dsp_pedon_id, depth_increments) %>%
+  summarize(soc_0to30 = sum(soc[apparent_depth=="0-10 cm" | apparent_depth=="10-30 cm"]),
+            soc_0to100 = sum(soc))
+
+# Boxplot comparing total SOC stocks (30 cm) between treatments within soil types
+soc30_esm_boxplot <- ggplot(esm_standard_min_totals, 
+                         aes(x=project, y=soc_0to30, fill=factor(label, levels=c("BAU", "SHM", "Ref")))) +
+  geom_boxplot() +
+  labs(x="Project", y="SOC stock to 30 cm depth (Mg/ha)") +
+  scale_x_discrete(labels=project_labels) +
+  scale_fill_manual(values=c("#FED789FF","#72874EFF","#476F84FF"),
+                     breaks=c("BAU", "SHM", "Ref"), 
+                    name="Management") +
+  theme_katy_grid() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+soc30_esm_boxplot
+
+# Boxplot comparing total SOC stocks (100 cm) between treatments within soil types
+soc100_esm_boxplot <- ggplot(esm_standard_min_totals, 
+                         aes(x=project, y=soc_0to100, fill=factor(label, levels=c("BAU", "SHM", "Ref")))) +
+  geom_boxplot() +
+  labs(x="Project", y="SOC stock to 100 cm depth (Mg/ha)") +
+  scale_x_discrete(labels=project_labels) +
+  scale_fill_manual(values=c("#FED789FF","#72874EFF","#476F84FF"),
+                     breaks=c("BAU", "SHM", "Ref"), 
+                    name="Management") +
+  theme_katy_grid() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+soc100_esm_boxplot
+
+soc_esm_grid <- plot_grid(soc30_esm_boxplot + theme(legend.position="none", axis.title.x=element_blank(), axis.text.x=element_blank()),
+          soc100_esm_boxplot + theme(legend.position="none"),
+          ncol=1, labels=c("A", "B"), rel_heights=c(1, 1.4))
+soc_esm_grid
+soc_esm_leg <- get_legend(soc100_esm_boxplot)
+
+plot_grid(soc_esm_grid, soc_esm_leg, rel_widths = c(1, .23))
+ggsave(here("figs", "ref_states_figs","figsupp1_dsp4sh_soc_esm_stocks.png"), width=11, height=10, units="in", dpi=400)
+```
+## Comparison of ESM results to fixed depth results
+
+```{r comparison of ESM to fixed depth results}
+esm_standard_min_totals_long <- esm_standard_min_totals %>%
+  pivot_longer(soc_0to30:soc_0to100, names_to="depth", values_to="soc_stock") %>%
+  select(-depth_increments) %>%
+  mutate(depth = case_when(depth== "soc_0to30" ~ "0to30cm",
+                               depth=="soc_0to100" ~ "0to100cm"))
+
+soc_pedon_fixed <- soc_pedon %>%
+  select(project, label, dsp_pedon_id, soc_stock_0_30cm, soc_stock_100cm) %>%
+  pivot_longer(soc_stock_0_30cm:soc_stock_100cm,
+               names_to="depth", values_to="soc_stock") %>%
+    mutate(depth = case_when(depth== "soc_stock_0_30cm" ~ "0to30cm",
+                               depth=="soc_stock_100cm" ~ "0to100cm"))
+
+soc_fixed_esm <- soc_pedon_fixed %>%
+  left_join(esm_standard_min_totals_long, by=c("project", "label", "dsp_pedon_id","depth"), suffix=c("_fixed", "_esm")) %>%
+  pivot_longer(soc_stock_fixed:soc_stock_esm, names_to="calc_method", values_to="soc_stock") %>%
+  mutate(depth = factor(depth, levels=c("0to30cm", "0to100cm"))) %>%
+  filter(project!="TexasA&MPt-2")
+
+project_labels2 <- c("UnivOfMinnesota" = "University \nof \nMinnesota",
+                    "UTRGV" = "University \nof Texas\nRGV",
+                    "WashingtonState" = "Washington\nState",
+                    "TexasA&MPt-1" = "Texas \nA&M-1",
+                    "TexasA&MPt-2" = "Texas \nA&M-2",
+                    "NCState" = "North \nCarolina \nState",
+                    "Illinois" = "University \nof \nIllinois",
+                    "OregonState" = "Oregon\nState",
+                    "KansasState" = "Kansas\nState",
+                    "UConn" = "University \nof \nConnecticut")
+
+ggplot(soc_fixed_esm, aes(x=label, y=soc_stock, fill=calc_method)) +
+  geom_boxplot() +
+  facet_grid(project ~ depth, scales="free_y", labeller=labeller(project = project_labels2, 
+                                                                 depth=c("0to100cm"="0 to 100 cm", "0to30cm"="0 to 30 cm"))) +
+  labs(x="Management", y="SOC Stock (Mg/ha)") +
+  scale_fill_paletteer_d("nationalparkcolors::Arches", name="Calculation method",
+                         labels=c("ESM (Cubic Spline)", "Fixed Depth")) +
+  theme_katy()
+ggsave(here("figs", "ref_states_figs", "soc_fixed_esm_comparison.png"), width=7, height=11, dpi=400)
+```
+
+Table of difference in SOC stocks calculated via fixed depth vs. ESM:
+
+```{r table of fixed depth vs ESM stock results}
+# Calculate differences
+soc_stock_comparison <- soc_fixed_esm %>%
+  pivot_wider(names_from="calc_method", values_from="soc_stock") %>%
+  group_by(project, label, depth) %>%
+  summarize(across(soc_stock_fixed:soc_stock_esm, ~round(mean(.x, na.rm=TRUE),1))) %>%
+  mutate(difference = round(soc_stock_fixed - soc_stock_esm,1)) %>%
+  mutate(percent_diff = round((difference / soc_stock_esm)*100,1)) %>%
+  mutate(label=factor(label, levels=c("BAU", "SHM", "Ref"))) %>%
+  arrange(project, label, depth)
+
+flextable(soc_stock_comparison)
+
+write_csv(soc_stock_comparison, here("figs", "ref_states_figs", "soc_stock_fd_esm_difference.csv"))
+
+soc_stock_comparison_summary <- soc_stock_comparison %>%
+  ungroup() %>%
+  group_by(depth) %>%
+  summarize(mean_diff = round(mean(difference),1),
+            mean_percent_diff = round(mean(percent_diff),1))
+flextable(soc_stock_comparison_summary)
+```
+
+Mean difference in SOC stocks between fixed depth and ESM is 9.5 Mg/ha (greater in fixed depth vs ESM), mean percent difference is 14.3%.
+
+## Fig 2 - Ribbon plot of SOC stocks by depth (continuous):
+
+```{r Fig 2 - ribbon plot of SOC stocks with depth, echo=FALSE}
+# Promote horizon data to SPC
+soc_spc <- soc_horizon
+depths(soc_spc) <- dsp_pedon_id ~ hrzdep_t + hrzdep_b
+hzdesgnname(soc_spc) <- 'hzdesg'
+# promote project and label to site-level so they can be used as grouping variables
+site(soc_spc) <- ~ project + label + soil
+
+plotSPC(subset(soc_spc, project=="UTRGV"))
+
+# Calculate stocks by depth increment for each project and management condition
+slab_ref <- aqp::slab(subset(soc_spc, label=="Ref"),
+                      fm = project ~ soc_stock_hrz,
+                      slab.structure = seq(0,100,by=10)) %>%
+  mutate(label="Ref")
+
+slab_shm <- aqp::slab(subset(soc_spc, label=="SHM"),
+                      fm = project ~ soc_stock_hrz,
+                      slab.structure = seq(0,100,by=10)) %>%
+  mutate(label="SHM")
+slab_bau <- aqp::slab(subset(soc_spc, label=="BAU"),
+                      fm = project ~ soc_stock_hrz,
+                      slab.structure = seq(0,100,by=10)) %>%
+  mutate(label="BAU")
+
+# Put management conditions together
+slab_mgmt <- bind_rows(slab_ref, slab_shm, slab_bau)
+
+# Plot with all mgmt together
+ggplot(slab_mgmt, aes(x=top, y=p.q50)) +
+  geom_line(linewidth=1.2, aes(color=label)) +
+  geom_ribbon(aes(ymin=p.q25, ymax=p.q75, x=top, fill=label), alpha=0.2) +
+  xlim(c(100,0)) +
+  coord_flip() +
+  labs(title="SOC Stocks by Depth", x="Depth (cm)", y="SOC (Mg/ha)") +
+  facet_wrap(~ project, scales = "free_x", labeller=labeller(project=project_labels)) +
+  scale_fill_manual(values=c("#FED789FF","#72874EFF","#476F84FF"),
+                     breaks=c("BAU", "SHM", "Ref"), 
+                    guide="none") +
+  scale_color_manual(values=c("#FED789FF","#72874EFF","#476F84FF"),
+                     breaks=c("BAU", "SHM", "Ref"), 
+                    name="Management") +
+  theme_katy()
+ggsave(here("figs", "ref_states_figs","fig2_soc_ribbon_depth.png"), width=10, height=11, units="in", dpi=400)
+```
+
+Takeaways:
+
+-   Very few projects actually showed greater SOC stocks throughout the
+    soil profile (Minnesota, Texas A&M, UTRGV)
+-   Differences in C stocks tended to be most apparent at shallow depths
+    (though see Texas A&M Pt 1 and Minnesota for exceptions where
+    differences were greater deeper in the soil profile)
+
+# Test effect of treatment on SOC stocks and concentrations with mixed linear model
+
+## Effect of treatment on SOC stocks to 100 cm depth
+
+```{r mixed linear model of SOC stocks to 100 cm by label and soil}
+# Remove NAs from data
+soc100_clean <- soc_pedon %>%
+  select(dsp_pedon_id, project, label, soil, soc_stock_100cm) %>%
+  na.omit() 
+
+# Random effects: project
+# Fixed effects: label
+soc_stock100_mixed <- lmer(soc_stock_100cm ~ label + (1|project), data = soc100_clean)
+summary(soc_stock100_mixed)
+
+# Test significance of treatment by comparing full and reduced models, use likelihood ratio test
+stock100_mixed_full <- lmer(soc_stock_100cm ~ label + (1|project), data = soc100_clean, REML = FALSE)
+stock100_mixed_reduced <- lmer(soc_stock_100cm ~ (1|project), data = soc100_clean, REML = FALSE)
+anova(stock100_mixed_full, stock100_mixed_reduced, text="Chisq")
+
+# Tukey post-hoc
+soc_stock100_mixed_tukey <- glht(soc_stock100_mixed, linfct = mcp(label = 'Tukey'))
+summary(soc_stock100_mixed_tukey)
+```
+
+**Results:** Full model is significantly different from reduced model -
+there is a significant effect of treatment when between-project
+variation is controlled for. Tukey HSD post-hoc test shows that Ref SOC
+stock is significantly different from BAU and Ref groups.
+
+## Effect of treatment on SOC stocks to 30 cm depth
+
+```{r mixed linear model of SOC stocks to 30 cm by label and soil}
+# Remove NAs from data
+soc30_clean <- soc_pedon %>%
+  select(dsp_pedon_id, project, label, soil, soc_stock_0_30cm) %>%
+  na.omit() 
+
+# Random effects: project
+# Fixed effects: label
+soc_stock30_mixed <- lmer(soc_stock_0_30cm ~ label + (1|project), data = soc30_clean)
+summary(soc_stock30_mixed)
+
+# Test significance of treatment by comparing full and reduced models, use likelihood ratio test
+stock30_mixed_full <- lmer(soc_stock_0_30cm ~ label + (1|project), data = soc30_clean, REML = FALSE)
+stock30_mixed_reduced <- lmer(soc_stock_0_30cm ~ (1|project), data = soc30_clean, REML = FALSE)
+anova(stock30_mixed_full, stock30_mixed_reduced, text="Chisq")
+# Full model is significantly different from reduced model - there is a significant effect of treatment when between-project variation is controlled for 
+
+# Tukey post-hoc
+soc_stock30_mixed_tukey <- glht(soc_stock30_mixed, linfct = mcp(label = 'Tukey'))
+summary(soc_stock30_mixed_tukey)
+```
+
+**Results:** Full model is significantly different from reduced model -
+there is a significant effect of treatment when between-project
+variation is controlled for. Tukey HSD post-hoc test shows that Ref SOC
+stock is significantly different from BAU and Ref groups.
+
+## Plot results of mixed linear model
+
+```{r Fig 3 - plot results of mixed linear model to 30 and 100 cm, echo=FALSE}
+# Plot predictions of 30cm SOC stocks under each treatment
+pred_stock30 <- ggpredict(soc_stock30_mixed, terms = c("label"))
+pred30 <- ggplot(pred_stock30, aes(x=x, y=predicted)) +
+  geom_point() +
+  geom_errorbar(aes(x=x, ymin=conf.low, ymax=conf.high)) +
+  labs(x="Management", y="Predicted SOC stock to 30 cm (Mg/ha)") +
+  theme_katy_grid()
+
+# Plot predictions of 100cm SOC stocks under each treatment
+pred_stock100 <- ggpredict(soc_stock100_mixed, terms = c("label"))
+
+pred100 <- ggplot(pred_stock100, aes(x=x, y=predicted)) +
+  geom_point() +
+  geom_errorbar(aes(x=x, ymin=conf.low, ymax=conf.high)) +
+  labs(x="Management", y="Predicted SOC stock to 100 cm (Mg/ha)") +
+  theme_katy_grid()
+
+plot_grid(pred30, pred100,
+          ncol=1, labels=c("A", "B"))
+ggsave(here("figs", "ref_states_figs","fig3_lmer_results.png"), width=9, height=9, units="in", dpi=400)
+```
+
+Takeaways:
+
+-   Though not many significant differences are detected between
+    treatments within each project, mixed linear model suggests that
+    when accounting for between-project variability, SOC stocks (both
+    30cm and 100cm depth) are significantly higher in the Ref condition
+    vs. SHM and BAU.
+
+-   Supports choice of Ref conditions as a broad concept.
+
+# SHAPE Score Analysis
+
+Plot SOC stocks vs SHAPE scores:
+
+```{r plot SHAPE scores vs carbon stocks}
+# Need to join SHAPE scores to SOC stock data
+shape_soc_stock <- shape_spatial %>%
+  select(dsp_pedon_id, score_mean_soc, gt_90_soc) %>%
+  left_join(select(soc_pedon, dsp_pedon_id, project, soil, label, trt, lu, till, soc_stock_0_30cm, soc_stock_100cm),
+            by="dsp_pedon_id")
+
+# Details of logarithmic regression
+shape_soc_lm <- lm(score_mean_soc ~ log(soc_stock_100cm), data=shape_soc_stock)
+summary(shape_soc_lm)
+
+# Plot
+shape_soc_plot <- ggplot(shape_soc_stock, aes(x=soc_stock_100cm, y=score_mean_soc)) +
+  geom_point(aes(colour=label)) + 
+  geom_smooth(method="lm", formula=y~log(x), color="black") +
+  annotate(geom="text", x=250, y=0.22,
+           label=expression(atop("y = -0.90 + 0.32*log(x)", R^2~"= 0.45, p < 0.001"))) +
+  labs(x="SOC stock to 100 cm depth (Mg/ha)",
+       y="SHAPE Score (Peer Group Percentile)") +
+  scale_colour_manual(values=c("#FED789FF","#72874EFF","#476F84FF"),
+                    breaks=c("BAU", "SHM", "Ref"), 
+                    name="Management") +
+  theme_katy()
+shape_soc_plot
+```
+
+Boxplots of SHAPE SOC scores:
+
+```{r Fig 5 - panel figure showing boxplot of SHAPE scores and regression with stocks, echo=FALSE}
+# Join in project data
+shape_spatial_proj <- shape_spatial %>%
+  select(dsp_pedon_id, score_mean_soc, gt_90_soc) %>%
+  left_join(select(project, dsp_pedon_id, project, soil, label, trt, lu, till), by="dsp_pedon_id") %>%
+  mutate(shape_source = "spatial")
+
+# Boxplot showing SHAPE scores in just Ref states, separated by project
+ggplot(shape_spatial_proj %>% filter(label=="Ref"), aes(x=project, y=score_mean_soc)) +
+  geom_boxplot(fill="#476F84FF") +
+  geom_abline(intercept=0.90, slope=0, linetype="dashed") +
+  geom_abline(intercept=0.75, slope=0, linetype="dashed") +
+    labs(x="Project", y="SHAPE Score (Peer Group Percentile)") +
+  scale_x_discrete(labels=project_labels) +
+  scale_fill_viridis(discrete=TRUE) +
+  theme_katy() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+ggsave(here("figs", "ref_states_figs","fig4_shape_ref.png"), width=9, height=6, units="in", dpi=400)
+
+# Boxplot showing SHAPE scores in different management categories, separated by project
+shape_boxplot_all <- ggplot(shape_spatial_proj, aes(x=project, y=score_mean_soc, fill=label)) +
+  geom_boxplot() +
+  geom_abline(intercept=0.90, slope=0, linetype="dashed") +
+  geom_abline(intercept=0.75, slope=0, linetype="dashed") +
+  labs(x="Project", y="SHAPE Score (Peer Group Percentile)") +
+  scale_x_discrete(labels=project_labels) +
+  scale_fill_manual(values=c("#FED789FF","#72874EFF","#476F84FF"),
+                    breaks=c("BAU", "SHM", "Ref"), 
+                    name="Management") +
+  theme_katy() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+shape_boxplot_all
+ggsave(here("figs", "ref_states_figs","fig5_shape_all.png"), width=10, height=6, units="in", dpi=400)
+
+# Boxplot showing SHAPE scores in different management categories (no separation by project)
+shape_boxplot_condensed <- ggplot(shape_spatial_proj, aes(x=factor(label, levels=c("BAU", "SHM", "Ref")), 
+                                                          y=score_mean_soc, 
+                      fill=factor(label, levels=c("BAU", "SHM", "Ref")))) +
+  geom_boxplot() +
+  geom_abline(intercept=0.90, slope=0, linetype="dashed") +
+  geom_abline(intercept=0.75, slope=0, linetype="dashed") +
+  labs(y="SHAPE Score (Peer Group Percentile)",
+       x="Management System") +
+  scale_fill_manual(values=c("#FED789FF","#72874EFF","#476F84FF"),
+                    breaks=c("BAU", "SHM", "Ref"), 
+                    name="Management") +
+  theme_katy() +
+  theme(plot.title=element_text(hjust=0.5), legend.position="none")
+shape_boxplot_condensed
+ggsave(here("figs", "ref_states_figs", "fig4_soc_shape_boxplot.png"), width=6, height=5, units="in", dpi=400)
+
+# Panel figure of all SHAPE and consolidated SHAPE AND SOC stock
+shape_grid_bottom <- plot_grid(shape_boxplot_condensed + theme(legend.position="none"),
+          shape_soc_plot + theme(legend.position="none"),
+          ncol=2, labels=c("B", "C"))
+
+shape_grid <- plot_grid(shape_boxplot_all + theme(legend.position="none"),
+                        shape_grid_bottom,
+                        ncol=1, labels=c("A", ""), rel_heights=c(1.23, 1))
+
+shape_leg <- get_legend(shape_boxplot_all)
+
+plot_grid(shape_grid, shape_leg, rel_widths = c(1, 0.23))
+ggsave(here("figs", "ref_states_figs","fig5_shape_scores.png"), width=10, height=10, units="in", dpi=400)
+```
+
+Overall, the SHAPE scores support the Ref/SHM/BAU groupings:
+
+-   Very few projects had median Ref SHAPE score at 90th percentile or
+    above (Illinois, Oregon State, University of Minnesota, and UTRGV)
+
+-   Most projects had median Ref SHAPE score at 75th percentile or above
+    (only Texas A&M projects do not hit 75th percentile - wonder if this
+    is a spatial issue)
+
+-   Only one project has SHM SHAPE score at 90th percentile (UConn)
+
+-   Few projects had SHM SHAPE scores at 75th percentile (University of
+    Minnesota, Oregon State, NC State is just a hair below the 75th
+    percentile)
+
+-   No projects had BAU SHAPE scores at or above the 75th percentile
+
+## Comparing Spatial and non-spatial SHAPE scores
+```{r spatial vs regular SHAPE scores}
+# Prepare data and join
+shape_all_comp <- shape_all %>%
+  select(dsp_pedon_id, project, soil, label, score_mean_soc_mapped) %>%
+  rename(score_mean_soc = score_mean_soc_mapped) %>%
+  mutate(shape_source = "classic")
+
+shape_spatial_comp <- shape_spatial_proj %>%
+  select(dsp_pedon_id, project, soil, label, score_mean_soc, shape_source)
+
+shape_comparison <- bind_rows(shape_all_comp, shape_spatial_comp)
+
+shape_comparison_wider <- shape_comparison %>%
+  pivot_wider(names_from = shape_source, values_from = score_mean_soc)
+
+# Plot
+ggplot(shape_comparison_wider, aes(x=classic, y=spatial, colour=project)) +
+  geom_point() +
+  geom_abline(slope=1) +
+  labs(x="Classic SHAPE Score", y="Spatial SHAPE Score") +
+  scale_color_paletteer_d("rcartocolor::Safe", labels=project_labels, name="Project") +
+  theme_katy()
+ggsave(here("figs", "ref_states_figs", "shape_source_comparison_line.png"), width=7, height=5, units="in", dpi=400)
+
+# Boxplot
+ggplot(shape_comparison, aes(x=factor(label, levels=c("BAU", "SHM", "Ref")), y=score_mean_soc, 
+                             fill=shape_source)) +
+  geom_boxplot() +
+  facet_wrap(~project, scales = "free_x", labeller=labeller(project=project_labels)) +
+  labs(x="Management System", y="SHAPE Score (Peer Group Percentile)") +
+  scale_fill_paletteer_d("nationalparkcolors::Arches",
+                         name="SHAPE Source", labels=c("Classic", "Spatial")) +
+  theme_katy()
+ggsave(here("figs", "ref_states_figs", "shape_source_comparison_boxplot.png"), width=8, height=7, units="in", dpi=400)
+```
+
+## SHAPE Scores and ESD-STMs
+```{r ecological sites}
+dsp4sh6 <- dbConnect(SQLite(), here("data_raw", "dsp4sh6.db")) 
+db <- lapply(setNames(nm = dbListTables(dsp4sh6)), dbReadTable, conn = dsp4sh6)
+
+eco_sites <- db$plotoverview %>% 
+  clean_names() %>%
+  select(project, dsp_plot_id, ecological_site, ecological_site_id, ecological_state, ecological_state_id)
+
+eco_sites_trt <- eco_sites %>%
+  left_join(select(project, dsp_plot_id, label, trt), by="dsp_plot_id") %>%
+  distinct()
+
+shape_plot <- shape_all %>%
+  left_join(select(project, dsp_plot_id, dsp_pedon_id), by="dsp_pedon_id")
+
+eco_sites_shape <- eco_sites %>%
+  left_join(shape_plot, by="dsp_plot_id")
+```
+
+```{r soc shape boxplots for each project}
+shape_soc_proj <- shape_all %>%
+  select(project, dsp_pedon_id, label, score_mean_soc_mapped)
+
+# Boxplot of SOC shape scores for each project
+ggplot(shape_soc_proj, aes(x=factor(label, levels=c("BAU", "SHM", "Ref")), 
+                          y=score_mean_soc_mapped, 
+                          fill=factor(label, levels=c("BAU", "SHM", "Ref")))) +
+  geom_boxplot() +
+  facet_wrap(vars(project), labeller=labeller(project=project_labels)) +
+  labs(y="SHAPE Score (Peer Group Percentile)",
+       x="Management") +
+  scale_fill_manual(values=c("#FED789FF","#72874EFF","#476F84FF")) +
+  theme_katy() +
+  theme(legend.position="none")
+
+
+```
+```{r try OSU and UTRGV eco site analysis}
+shape_osu <- eco_sites_shape %>%
+  filter(project.y=="OregonState")
+
+ggplot(shape_osu, aes(x=factor(label, levels=c("BAU", "SHM", "Ref")), 
+                          y=score_mean_soc_mapped, 
+                          fill=factor(label, levels=c("BAU", "SHM", "Ref")))) +
+  geom_boxplot() +
+  facet_wrap(vars(ecological_site)) +
+  labs(y="SHAPE Score (Peer Group Percentile)",
+       x="Management") +
+  scale_fill_manual(values=c("#FED789FF","#72874EFF","#476F84FF")) +
+  theme_katy() +
+  theme(legend.position="none")
+
+
+shape_utrgv <- eco_sites_shape %>%
+  filter(project.y=="UTRGV")
+
+ggplot(shape_utrgv, aes(x=ecological_state, 
+                          y=score_mean_soc_mapped, 
+                          fill=ecological_state)) +
+  geom_boxplot() +
+  labs(y="SHAPE Score (Peer Group Percentile)",
+       x="Ecological state",
+       title="UTRGV - Loamy Bottomland Ecological Site") +
+  scale_fill_manual(values=c("#FED789FF", "#476F84FF")) +
+  theme_katy() +
+  theme(legend.position="none")
+```
+
+Both the OSU and UTRGV projects look like SHAPE scores correlate well with ecological states. The OSU project did not assign ecological states, and the ESD-STM appears missing from EDIT so it's hard to assign in retrospect.
+
+Do SHAPE scores correlate more closely with ecological states then SOC%?
+
+```{r shape vs SOC% for eco states}
+utrgv_soc_surf <- surf %>%
+  select(project, dsp_pedon_id, soc_pct) %>%
+  filter(project=="UTRGV")
+
+shape_soc_utrgv <- shape_utrgv %>%
+  select(project.y, dsp_pedon_id, ecological_site, ecological_state, soil, label, score_mean_soc_mapped) %>%
+  rename(project = project.y,
+         soc_shape = score_mean_soc_mapped) %>%
+  left_join(utrgv_soc_surf, by=c("dsp_pedon_id", "project")) %>%
+  rename(soc_measured = soc_pct) %>%
+  pivot_longer(cols=soc_shape:soc_measured,
+               names_to="type", values_to="value")
+
+ggplot(shape_soc_utrgv, aes(x=ecological_state, 
+                          y=value, 
+                          fill=ecological_state)) +
+  geom_boxplot() +
+  labs(x="Ecological state",
+       title="UTRGV - Loamy Bottomland Ecological Site",
+       y=NULL) +
+  facet_wrap(vars(type), scales="free",
+             strip.position = "left", 
+             labeller = as_labeller(c(soc_measured = "Measured SOC (%)", soc_shape = "SOC SHAPE Score (Peer Group Percentile"))) +
+  scale_fill_manual(values=c("#FED789FF", "#476F84FF")) +
+  theme_katy() +
+  theme(legend.position="none",
+        strip.background = element_blank(),
+        strip.placement = "outside")
+ggsave(here("figs", "ref_states_figs", "utrgv_soc_ecological_sites.png"), width=8, height=5, dpi=400)
+```
+
+The tricky thing here is that woodland state is not actually the reference state for this ecological site - the reference state is savannah!
+
+# Some kind of climate figure
+
+```{r some kind of climate figure}
+# trying to get the climate data for each site - but this is surprisingly hard since many cooperators didn't fill in the site ID x__X
+# try making my own site ID
+
+clim <- soc_pedon %>%
+  distinct(project, dsp_plot_id, label, mat, map) %>%
+  group_by(project) %>%
+  summarize(mean_mat = mean(mat),
+            mean_map = mean(map))
+
+climate_plot <- ggplot(clim, aes(x=fct_reorder(project, mean_mat), y=mean_mat, fill=mean_map)) +
+  geom_bar(position="dodge", stat="identity") +
+  labs(x="Project", y="Mean Site MAT") +
+  scale_x_discrete(labels=project_labels) +
+  paletteer::scale_fill_paletteer_c("ggthemes::Orange-Blue Diverging", name="Mean Site MAP") +
+  theme_katy() +
+  theme(axis.text.x=element_text(angle=45, hjust=1),
+        plot.margin = margin(l=30))
+climate_plot
+
+climate_scatter <- ggplot(clim, aes(x=mean_mat, y=mean_map, color=project)) +
+  geom_point(size=3) +
+  labs(x="Mean Annual Temperature", y="Mean Annual Precipitation") +
+  scale_color_paletteer_d("rcartocolor::Safe", labels=project_labels, name="Project") +
+  theme_katy()
+climate_scatter
+ggsave(here("figs", "ref_states_figs", "fig1_site_climate.png"), width=6.5, height=5, units="in", dpi=400)
+```
+
+```{r Ekundayo dual-axis climate figure}
+# Create the plot with geom_point
+proj_tem_prep_clim <- ggplot(clim, aes(x = project)) +
+  # Add temperature points (scaled for dual y-axis)
+  geom_point(aes(y = mean_mat * 40), color = "#CC5800FF", size = 4, shape = 19) + # Adjust scale factor as needed
+  # Add precipitation points
+  geom_point(aes(y = mean_map), color = "#1E8E99FF", size = 4, shape = 17) +
+  scale_x_discrete(labels=project_labels, name="Project") + 
+  # Customize y-axes
+  scale_y_continuous(
+    name = "Mean Annual Precipitation (mm)",
+    sec.axis = sec_axis(~ . / 40, name = "Mean Annual Temperature (°C)")) + # Adjust scale factor
+  theme_katy() +
+  theme(axis.title.y=element_text(color="#1E8E99FF"),
+        axis.title.y.right=element_text(color="#CC5800FF"),
+        axis.text.x=element_text(angle=45, hjust=1),
+        plot.margin = margin(l=30))
+
+proj_tem_prep_clim
+ggsave(here("figs", "ref_states_figs", "fig1_climate_2_axis.png"), width=6.5, height=5, units="in", dpi=400)
+
+# Optional to include in figure: color text labels to indicate which symbol is which
+  # Manually add legend labels
+  # annotate("text", x = 1, y = max(clim$mean_map) * 1.1, label = "Annual Precipitation (mm)", color = "#1E8E99FF", hjust = 0) +
+  # annotate("text", x = 1, y = min(clim$mean_mat) * 40 * 1.1, label = "Annual Average Temperature (°C)", color = "#CC5800FF", hjust = 0) +
+```
+
+And a soil texture figure
+```{r soil texture figure - sampled texture only}
+sampled_texture <- read.csv(here("data_processed", "dsp4sh_soc_prism3_compname.csv")) %>% 
+  clean_names() %>%
+  select(project, label, dsp_pedon_id, dsp_sample_id, hrzdep_t, hrzdep_b, soil, texture, sand_pct, clay_pct, silt_pct) %>%
+  filter(!is.na(sand_pct)) %>%
+  mutate(texture_source = "sampled") %>%
+  filter(hrzdep_b <= 10) %>%
+  group_by(project, soil) %>%
+  summarize(mean_sand_pct = mean(sand_pct),
+            mean_silt_pct = mean(silt_pct),
+            mean_clay_pct = mean(clay_pct))
+  
+triangle_plot <- ggtern(sampled_texture, aes(x=mean_sand_pct, y=mean_clay_pct, z=mean_silt_pct, 
+                                        color=project)) +
+  geom_point(size=3, alpha=0.6) +
+  theme_showarrows() +
+  labs(yarrow = "Clay (%)",
+       zarrow = "Silt (%)",
+       xarrow = "Sand(%)",
+       color = "Project")  +
+  theme_clockwise() +
+  scale_color_paletteer_d("rcartocolor::Safe", labels=project_labels)
+triangle_plot
+```
+
+```{r get texture data from SSURGO}
+# need table of unique locations
+unique_locations <- project %>%
+  select(project, label, trt, soil, pedon_x, pedon_y) %>%
+  group_by(project, label, trt) %>%
+  slice(1)
+
+# convert to sf object
+pedon_pts <- st_as_sf(unique_locations, coords = c("pedon_x", "pedon_y"), crs = 4326)
+
+# SDA query
+
+# First get map unit keys
+mu <- SDA_spatialQuery(pedon_pts, what = 'mukey', geomIntersection = TRUE, byFeature=TRUE)
+# bind to pedons
+pedon_pts_mu = cbind(pedon_pts, mu)
+
+comp <- sprintf("mukey IN %s", format_SQL_in_statement(mu$mukey))
+# query to return mukey
+comp_s <- fetchSDA(WHERE = comp, duplicates = TRUE, childs = FALSE, nullFragsAreZero = TRUE, stringsAsFactors = FALSE, rmHzErrors = FALSE)
+plot(comp_s[1:10], color = "claytotal_r", label = 'compname', cex.names = 0.75)
+
+comp_texture <- as(comp_s, "data.frame") %>%
+  filter(compname %in% unique_locations$soil) %>%
+  select(compname, comppct_r, hzname, hzdept_r, hzdepb_r, texture, sandtotal_r, silttotal_r, claytotal_r) %>%
+  filter(hzname!="Oe") %>%
+  group_by(compname) %>%
+  slice(1) # select only top horizon
+
+mapped_texture <- unique_locations %>%
+  ungroup() %>%
+  left_join(select(comp_texture, compname, texture, sandtotal_r, silttotal_r, claytotal_r), by=c("soil" = "compname")) %>%
+  distinct(project, soil, texture, sandtotal_r, silttotal_r, claytotal_r) %>%
+  rename(sand_pct = sandtotal_r, silt_pct = silttotal_r, clay_pct = claytotal_r) %>%
+  filter(!is.na(sand_pct)) %>%
+  mutate(texture_source = "mapped")
+```
+
+```{r usda soil texture triangle overlay data}
+# rename the labels
+USDA <- USDA %>% 
+  rename("clay_pct" = Clay, "sand_pct" = Sand, "silt_pct" = Silt) %>% 
+  mutate(
+    label = case_when(
+      Label == "Clay" ~ "C",
+      Label == "Sandy Clay" ~ "SC",
+      Label == "Sandy Clay Loam" ~ "SCL",
+      Label == "Sandy Loam" ~ "SL",
+      Label == "Loamy Sand" ~ "LS",
+      Label == "Sand" ~ "S",
+      Label == "Clay Loam" ~ "CL",
+      Label == "Silt Loam" ~ "SiL",
+      Label == "Silty Clay" ~ "SiC",
+      Label == "Silty Clay Loam" ~ "SiCL",
+      Label == "Silt" ~ "Si",
+      Label == "Loam" ~ "L",
+      TRUE ~ NA_character_
+    ))
+USDA_text <- USDA  %>% 
+  group_by(label) %>%
+  summarise_if(is.numeric, mean, na.rm = TRUE)
+USDA_text
+```
+
+```{r make texture triangle plot with SSURGO data}
+all_texture <- sampled_texture %>%
+  rename(sand_pct = mean_sand_pct,
+         silt_pct = mean_silt_pct,
+         clay_pct = mean_clay_pct) %>%
+  mutate(texture_source = "sampled") %>%
+  bind_rows(mapped_texture) 
+
+# make another column with project and soil in it
+project_labels_df <- data.frame(project_labels) %>%
+  rownames_to_column() %>%
+  rename(project = rowname)
+
+mapped_texture2 <- mapped_texture %>%
+  left_join(project_labels_df, by="project") %>%
+  unite("project_soil", c("project_labels", "soil"), remove=FALSE, sep=" - ")
+
+# Plot texture with SSURGO data only - another option with fill by project/soil combo
+# overlay textural triangle
+theme_set(theme_bw())
+triangle_plot3 <- ggtern(mapped_texture2, aes(x=sand_pct, y=clay_pct, z=silt_pct, 
+                                          color=project_soil)) +
+  geom_polygon(data=USDA,
+               aes(fill = label),
+               alpha = 0.0,
+               linewidth = 0.5,
+               color = "black",
+               show.legend = FALSE) +
+  geom_text(data = USDA_text,
+            aes(label = label),
+            color = 'grey40',
+            fontface = "bold",
+            size = 5) +
+  geom_point(size=4) +
+  theme_showarrows() +
+  labs(yarrow = "Clay (%)",
+       zarrow = "Silt (%)",
+       xarrow = "Sand(%)",
+       x="", y="", z="",
+       color = "Project")  +
+  theme_clockwise() +
+  scale_color_paletteer_d("rcartocolor::Safe", name="Project & Soil Series")
+triangle_plot3
+ggsave(here("figs", "ref_states_figs", "fig1_soil_texture_alt.png"), width=7, height=5.5, units="in", dpi=400)
+```
+
+Put climate and texture figure together!
+
+```{r climate and texture panel figure}
+# trying a couple of different methods
+
+# cowplot plot_grid()
+gg <- ggplotGrob(triangle_plot3)
+cowplot::plot_grid(proj_tem_prep_clim, gg)
+
+plot_grid(proj_tem_prep_clim, triangle_plot3,
+          ncol=1, labels=c("A", "B"), rel_heights=c(1, .4))
+ggsave(here("figs", "ref_states_figs", "fig1_clim_texture.png"), width=7, height=5, units="in", dpi=400)
+
+# cowplot ggdraw
+ggdraw() + 
+  draw_plot(proj_tem_prep_clim) +
+  draw_image(
+    here("figs", "ref_states_figs", "fig1_soil_texture_alt.png"), 
+    x = 1, y = 1, hjust = 1, vjust = 1, halign = 1, valign = 1,
+    width = 0.15
+  )
+
+# patchwork
+free(proj_tem_prep_clim) + free(triangle_plot3)
+ggsave(here("figs", "ref_states_figs", "fig1_clim_texture.png"), width=7, height=5, units="in", dpi=400)
+```
+
+```{r alternate texture triangle figure where OSU soil series are labeled}
+# Plot texture with SSURGO data only - fill by project, multiple soil series are labeled
+theme_set(theme_bw())
+triangle_plot2 <- ggtern(mapped_texture, aes(x=sand_pct, y=clay_pct, z=silt_pct, 
+                                          color=project)) +
+  geom_point(size=4) +
+  annotate("text", label="Jory", 
+           x=12, y=41, z=62, fontface="bold", colour="#117733FF", size=3) +
+    annotate("text", label="Woodburn", 
+           x=14, y=12, z=80, fontface="bold", colour="#117733FF", size=3) +
+  theme_showarrows() +
+  labs(yarrow = "Clay (%)",
+       zarrow = "Silt (%)",
+       xarrow = "Sand(%)",
+       x="", y="", z="",
+       color = "Project")  +
+  theme_clockwise() +
+  scale_color_paletteer_d("rcartocolor::Safe", labels=project_labels)
+triangle_plot2
+ggsave(here("figs", "ref_states_figs", "fig1_soil_texture.png"), width=6.5, height=5, units="in", dpi=400)
+```
+
+## Treatment table for eco sites
+
+```{r treatment table for eco sites}
+treatment_table <- project %>%
+  select(project, label, lu, till, trt) %>%
+  distinct()
+write_csv(treatment_table, here("figs", "ref_states_figs", "treatment_table.csv"))
+```
